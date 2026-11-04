@@ -32,6 +32,27 @@ final class AstronomyTests: XCTestCase {
         XCTAssertEqual(up.y, 1, accuracy: 1e-9)
     }
 
+    func testSkyRotationMatchesHorizontal() {
+        // 회전 행렬 · 적도 벡터 == horizontal -> arVector (같은 결과여야 함)
+        let ctx = Astronomy.Context(date: date, observer: seoul)
+        let m = Astronomy.equatorialToAR(context: ctx)
+        for (ra, dec) in [(279.23474, 38.78369), (101.28722, -16.71612), (37.95456, 89.26411), (200.0, -60.0)] {
+            let v = Astronomy.unitVector(ra: ra, dec: dec)
+            let r = (0..<3).map { i in (0..<3).reduce(0) { $0 + m[i][$1] * v[$1] } }
+            let want = Astronomy.arVector(Astronomy.horizontal(ra: ra, dec: dec, context: ctx))
+            XCTAssertEqual(r[0], want.x, accuracy: 1e-9)
+            XCTAssertEqual(r[1], want.y, accuracy: 1e-9)
+            XCTAssertEqual(r[2], want.z, accuracy: 1e-9)
+        }
+        // 회전 행렬이면 각 행은 길이 1이고 서로 수직
+        for i in 0..<3 {
+            for j in 0..<3 {
+                let dot = (0..<3).reduce(0) { $0 + m[i][$1] * m[j][$1] }
+                XCTAssertEqual(dot, i == j ? 1 : 0, accuracy: 1e-9)
+            }
+        }
+    }
+
     func testCatalogDecoding() throws {
         let json = #"{"epoch":"J2000","stars":[{"hip":32349,"ra":101.28722,"dec":-16.71612,"mag":-1.44,"name":"Sirius","ci":0.009}],"constellations":[{"id":"CMa","nameKo":"큰개자리","nameEn":"Great Dog","lines":[[32349,33160]]}]}"#
         let cat = try StarCatalog.load(from: Data(json.utf8))

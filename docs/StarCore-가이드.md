@@ -350,6 +350,46 @@ python3 tools/preview_art.py . preview.png Ori,UMa,Sco,Cyg
 
 여기서는 반대 방향(화면 픽셀 → 하늘 방향 → `M⁻¹`로 그림 픽셀)으로 계산한다. 출력 이미지의 각 픽셀이 그림의 어디에 해당하는지 찾는 방식이라 빈틈이 생기지 않는다.
 
+### 3.7 하늘 전체 = 회전 하나 (`Astronomy.equatorialToAR`)
+
+`horizontal()`은 별마다 세차 보정 → 시간각 → 고도/방위각을 계산한다. 그런데 이 단계들은 전부 **회전**이다.
+회전을 여러 번 해도 결국 회전 하나이므로, 어떤 시각의 "적도 벡터 → AR 벡터" 변환은 3×3 행렬 하나로 표현된다.
+
+```
+AR 벡터 = R(시각, 위치) · 적도 벡터(별마다 고정)
+```
+
+R을 구하는 법은 간단하다. 행렬의 각 열은 "축 방향 벡터를 변환한 결과"이므로,
+x축(적경 0°, 적위 0°), y축(적경 90°, 적위 0°), z축(천구 북극)을 `horizontal → arVector`로 변환해서 열로 쌓으면 된다.
+
+이게 왜 좋은가:
+- 별 5,000개 × 매 프레임 삼각함수 계산 → 프레임마다 행렬 하나만 계산
+- 3D 엔진에서는 별/선/그림을 **부모 노드 하나**에 넣고, 그 노드의 회전만 바꾸면 하늘 전체가 돈다
+- 단, 대기굴절은 회전이 아니라서(고도마다 다르게 휨) 이 방식에는 안 들어간다. 지평선 근처 0.5° 차이
+
+`AstronomyTests.testSkyRotationMatchesHorizontal`이 "행렬로 계산한 결과 = 별마다 계산한 결과"(오차 1e-9)와
+"행렬이 진짜 회전인지(각 행이 길이 1, 서로 수직)"를 확인한다.
+
+### 3.8 브라우저 시뮬레이터 (`simulator/`)
+
+Mac 없이 화면을 보려고 만든 도구. StarCore 밖에 있는 별도 Swift 패키지이고, StarCore를 의존성으로 가져다 쓴다.
+
+```
+simulator/run.sh
+  ├─ swift run StarSim   StarCore로 계산 → web/sky.json
+  │     별/선/그림/라벨: 적도 단위 벡터 (시간 불변)
+  │     frames: 2분 간격 24시간치 회전 행렬 721개
+  └─ python3 -m http.server  →  http://localhost:8000/simulator/web/
+        index.html (three.js): 하늘 그룹의 행렬 = frames[시각]
+```
+
+- **계산은 전부 StarCore가 한다.** JS는 받은 벡터에 행렬을 곱해서 그리기만 한다. 그래서 시뮬레이터에서 맞게 보이면 StarCore가 맞다는 뜻이다.
+- **three.js 좌표계가 ARKit과 같다** (+y 위, 카메라 기본 방향 -z). 그래서 StarCore의 AR 벡터를 변환 없이 쓴다.
+- 마우스 드래그 = 폰을 돌리는 것. 카메라가 보는 방향을 `(고도, 방위각)`으로 들고 있다가 `arVector`와 같은 식으로 벡터로 바꿔 `camera.lookAt`.
+- 별은 `THREE.Points` + 직접 쓴 셰이더(점 하나를 가우시안 원으로), 그림은 StarCore `ArtMesh` 그대로 `BufferGeometry`.
+- 텍스처 `flipY = false`: StarCore UV는 이미지 왼쪽 위가 (0,0)인데 three.js는 기본으로 이미지를 뒤집어 올리기 때문. RealityKit에서도 같은 종류의 문제가 생길 수 있다.
+- 땅: 반지름이 별보다 작은 아래쪽 반구를 마지막에 그려서 지평선 아래 별을 가린다.
+
 ---
 
 ## 4. 이 코드에 나오는 Swift 문법
@@ -422,7 +462,8 @@ swift test --filter CatalogTests/testCatalogSize   # 테스트 하나
 4. **함수 추가**: 지금 떠 있는 별 중 가장 밝은 별 N개를 돌려주는 함수 `visibleStars(catalog:context:limit:)`를 만들어 본다. (`filter`, `sorted`, `prefix`)
 5. **세차 끄고 비교**: `Context`의 `zeta`, `z`, `theta`를 0으로 두면 결과가 얼마나 어긋나는지 테스트 오차 메시지로 확인한다. (약 0.36°)
 6. **그림 미리보기**: `tools/preview_art.py`로 좋아하는 별자리를 그려 보고, `Art.swift`의 `mesh(segments:)`에서 `segments`를 1로 하면 큰 별자리(바다뱀자리 Hya)에서 무엇이 달라질지 생각해 본다.
-7. **도전: 달 위치**: Meeus 『Astronomical Algorithms』 47장 공식을 `Moon.swift`로 구현하고 astropy 값과 비교한다.
+7. **시뮬레이터로 확인**: `simulator/run.sh --date 2026-12-25T21:00:00+09:00`처럼 날짜를 바꿔 보고, 계절마다 남쪽 하늘에 뜨는 별자리가 바뀌는지 본다. `--lat -33.9 --lon 151.2`(시드니)로 하면 남십자자리가 보인다.
+8. **도전: 달 위치**: Meeus 『Astronomical Algorithms』 47장 공식을 `Moon.swift`로 구현하고 astropy 값과 비교한다.
 
 ### 참고 자료
 

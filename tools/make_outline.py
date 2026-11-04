@@ -48,6 +48,12 @@ def outline(src, edge=2, ink=12, glow=6):
     line = f((line * 255).astype(np.uint8), ImageFilter.GaussianBlur(0.7)).astype(np.float32) / 255
     halo = f((line * 255).astype(np.uint8), ImageFilter.GaussianBlur(glow)).astype(np.float32) / 255
     out = np.clip(line * 1.0 + halo * 0.8, 0, 1)
+
+    # 4) 가장자리 페이드: 번짐이 이미지 테두리에서 뚝 끊기면 하늘에 네모가 보이므로 테두리 쪽을 서서히 0으로
+    h, w = out.shape
+    yy, xx = np.mgrid[0:h, 0:w]
+    border = np.minimum(np.minimum(xx, w - 1 - xx), np.minimum(yy, h - 1 - yy))
+    out *= np.clip(border / (glow * 2.5), 0, 1)
     return (out * 255).astype(np.uint8)
 
 

@@ -30,6 +30,10 @@ cd tools && python3 build_catalog.py        # -> stars.json (별 ~5,000개, 88�
 cd .. && python3 tools/make_outline.py      # -> assets/constellations-outline/*.png
 python3 tools/preview_art.py . preview.png Ori,Leo outline
 
+# 브라우저 시뮬레이터 (Windows 브라우저가 자동으로 열림, 끝낼 땐 Ctrl+C)
+simulator/run.sh                            # 지금 시각, 서울
+simulator/run.sh --date 2026-12-25T21:00:00+09:00 --lat 33.5 --lon 126.5   # 날짜/위치 지정
+
 # 계산 로직 테스트
 cd ../StarCore && swift test
 ```

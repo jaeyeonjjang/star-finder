@@ -26,6 +26,10 @@ star-finder/
 ├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json + 그림
 ├── tools/make_outline.py    # 원본 그림 -> 윤곽선 + 번짐 (numpy, pillow)
 ├── tools/preview_art.py     # 그림이 별에 맞게 겹치는지 확인용 이미지 (numpy, pillow)
+├── simulator/               # 브라우저 시뮬레이터 (WSL에서 화면 확인용)
+│   ├── Sources/StarSim/     #   StarCore로 sky.json 생성 (별/선/그림 적도 벡터 + 시간별 회전 행렬)
+│   ├── web/index.html       #   three.js 렌더링, 마우스 = 폰 방향
+│   └── run.sh               #   빌드 -> 서버(:8000) -> Windows 브라우저
 └── StarCore/                # 순수 Swift 패키지 (Foundation만 사용, WSL/맥 공용)
     ├── Sources/StarCore/Models.swift     # StarCatalog, Star, Constellation, Horizontal, Vector3, Observer
     ├── Sources/StarCore/Astronomy.swift  # 율리우스일, GMST, 세차 보정, 적도->지평, 대기굴절, 지평->AR 벡터
@@ -41,6 +45,7 @@ star-finder/
 - 크기 지수(0.12), 색 채도(0.6)는 튜닝 값. 실기기에서 보고 조정.
 - 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선(CC BY-SA 4.0), Stellarium 그림(Free Art License), d3-celestial(BSD-3). 앱에 출처 표기 필요.
 - 그림 스타일: 윤곽선(흰 선 + 번짐, 검은 배경). 앱에서 금색으로 물들이고 가산 합성. 감도 기본값 ink=12.
+- 하늘 전체 = 회전 하나: `Astronomy.equatorialToAR(context:)`. 앱에서도 별/선/그림을 부모 노드 하나에 넣고 그 회전만 프레임마다 바꾼다 (시뮬레이터가 이 방식).
 - 그림 UV는 이미지 왼쪽 위 원점. RealityKit에서 뒤집혀 보이면 v를 1-v로, 안 보이면 삼각형 방향(컬링) 확인.
 
 ## 진행 상황
@@ -51,6 +56,7 @@ star-finder/
 - [x] (WSL) 미리 만들어 둠: 대기굴절, 등급별 크기, 색지수->색, 별자리 라벨 위치 (테스트 21개)
 - [x] (WSL) 별자리 그림 85장(88개 별자리 모두 덮음 — Car=아르고호 전체, Oph에 뱀 포함): 데이터 + 메시 계산 + 미리보기로 위치 확인 (테스트 28개)
 - [x] (WSL) 그림 윤곽선 스타일 변환 85장
+- [x] (WSL) 브라우저 시뮬레이터 (`simulator/run.sh`), 하늘 회전 행렬 (테스트 29개)
 - [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
 - [ ] (맥) 별자리 그림 표시 (MeshDescriptor + UnlitMaterial, 금색, 가산 합성)

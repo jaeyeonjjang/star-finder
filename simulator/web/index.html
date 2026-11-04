@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Star Finder 시뮬레이터</title>
+<style>
+  :root { --gold: #ffc061; --panel: rgba(10, 16, 30, 0.82); --text: #dfe6f3; --muted: #8b97ad; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #02040a; color: var(--text);
+               font: 13px/1.4 "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  canvas { display: block; cursor: grab; touch-action: none; }
+  canvas:active { cursor: grabbing; }
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .lbl { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; text-shadow: 0 0 4px #000; }
+  .lbl.con { color: var(--gold); font-size: 13px; opacity: 0.9; }
+  .lbl.star { color: #cfe0ff; font-size: 11px; transform: translate(6px, -50%); opacity: 0.8; }
+  .lbl.dir { color: #ff8a7a; font-weight: bold; font-size: 15px; }
+  #panel { position: fixed; top: 12px; left: 12px; width: 250px; padding: 12px 14px; border-radius: 10px;
+           background: var(--panel); backdrop-filter: blur(6px); }
+  #panel h1 { font-size: 14px; margin: 0 0 8px; color: var(--gold); }
+  #panel .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+  #panel input[type=range] { width: 130px; }
+  #panel .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin: 8px 0; }
+  #panel button { background: #1c2740; color: var(--text); border: 1px solid #33415f; border-radius: 6px;
+                  padding: 4px 10px; cursor: pointer; font: inherit; }
+  #time { font-size: 15px; font-variant-numeric: tabular-nums; }
+  #hud { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 8px;
+         background: var(--panel); font-variant-numeric: tabular-nums; color: var(--muted); }
+  #hide { position: absolute; top: 8px; right: 10px; padding: 0 6px; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; padding: 16px; text-align: center; }
+  @media (max-width: 600px) { #panel { width: auto; right: 12px; } }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+<div id="panel">
+  <button id="hide" title="패널 접기">–</button>
+  <h1>Star Finder 시뮬레이터</h1>
+  <div id="body">
+    <div id="time">-</div>
+    <div class="row"><input id="t" type="range" min="0" step="0.01" style="width:100%"></div>
+    <div class="row">
+      <span><button id="play">재생</button> <button id="now">처음</button></span>
+      <select id="speed"><option value="1">×60</option><option value="10" selected>×600</option><option value="60">×3600</option></select>
+    </div>
+    <div class="toggles">
+      <label><input type="checkbox" id="showStars" checked> 별</label>
+      <label><input type="checkbox" id="showLines" checked> 별자리 선</label>
+      <label><input type="checkbox" id="showArt" checked> 그림</label>
+      <label><input type="checkbox" id="showLabels" checked> 별자리 이름</label>
+      <label><input type="checkbox" id="showNames" checked> 별 이름</label>
+      <label><input type="checkbox" id="showGround" checked> 땅</label>
+    </div>
+    <div class="row">그림 밝기 <input id="artOpacity" type="range" min="0" max="1" step="0.01" value="0.35"></div>
+    <div class="row">별 크기 <input id="starScale" type="range" min="0.3" max="3" step="0.01" value="1"></div>
+    <div class="row">그림 색 <input id="artColor" type="color" value="#ffc061"></div>
+    <div style="color:var(--muted);margin-top:8px">드래그: 둘러보기 · 휠: 확대/축소<br>방향키: 둘러보기 · 스페이스: 재생</div>
+  </div>
+</div>
+<div id="hud">-</div>
+<div id="err"></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ───────── 데이터 ─────────
+// sky.json은 `swift run StarSim`이 StarCore로 계산한 결과.
+// 별/선/그림 좌표는 적도 단위 벡터(시간 불변), 시간에 따라 바뀌는 건 frames.matrices(하늘 회전)뿐.
+let sky;
+try {
+  sky = await (await fetch('sky.json')).json();
+} catch (e) {
+  const el = document.getElementById('err');
+  el.style.display = 'grid';
+  el.innerHTML = 'sky.json을 못 읽었어요.<br>저장소 루트에서 <code>simulator/run.sh</code>로 실행해 주세요.';
+  throw e;
+}
+const ART_DIR = '../../assets/constellations-outline/';
+const R = 100;                       // 천구 반지름 (앱과 같은 100m)
+
+// ───────── 장면 ─────────
+// three.js 좌표계 = ARKit .gravityAndHeading과 같음: +x 동, +y 위, -z 북. 그래서 StarCore 결과를 그대로 쓴다.
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x02040a);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+
+// 하늘 전체를 담는 그룹. 프레임마다 이 그룹의 회전만 바꾼다 (앱에서도 같은 방식 추천)
+const skyGroup = new THREE.Group();
+skyGroup.matrixAutoUpdate = false;
+scene.add(skyGroup);
+
+// 별: 점 하나 = 별 하나. 크기/색은 StarCore Appearance 결과
+const nStars = sky.stars.size.length;
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(sky.stars.pos.map(v => v * R), 3));
+starGeo.setAttribute('starColor', new THREE.Float32BufferAttribute(sky.stars.color, 3));
+starGeo.setAttribute('size', new THREE.Float32BufferAttribute(sky.stars.size, 1));
+const starMat = new THREE.ShaderMaterial({
+  uniforms: { scale: { value: 1 } },
+  vertexShader: `
+    attribute float size; attribute vec3 starColor; uniform float scale; varying vec3 vColor;
+    void main() {
+      vColor = starColor;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = max(2.5, size * 16.0 * scale);
+    }`,
+  fragmentShader: `
+    varying vec3 vColor;
+    void main() {
+      float d = length(gl_PointCoord - 0.5) * 2.0;   // 점 중심에서의 거리 0..1
+      float a = min(1.0, exp(-d * d * 12.0) * 1.3 + exp(-d * d * 3.0) * 0.3);  // 밝은 중심 + 옅은 번짐
+      gl_FragColor = vec4(vColor * a, a);
+    }`,
+  blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
+});
+const stars = new THREE.Points(starGeo, starMat);
+stars.renderOrder = 2;
+skyGroup.add(stars);
+
+// 별자리 선
+const linePos = [];
+for (let k = 0; k < sky.lines.length; k++) {
+  const i = sky.lines[k] * 3;
+  linePos.push(sky.stars.pos[i] * R, sky.stars.pos[i + 1] * R, sky.stars.pos[i + 2] * R);
+}
+const lineGeo = new THREE.BufferGeometry();
+lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
+  color: 0x7fa2e0, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+lines.renderOrder = 1;
+skyGroup.add(lines);
+
+// 별자리 그림: StarCore ArtMesh(위치, UV, 삼각형) 그대로 메시로
+const artGroup = new THREE.Group();
+skyGroup.add(artGroup);
+const artMats = [];
+const loader = new THREE.TextureLoader();
+for (const a of sky.art) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(a.pos.map(v => v * R * 0.995), 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(a.uv, 2));
+  g.setIndex(a.idx);
+  const tex = loader.load(ART_DIR + a.file);
+  tex.flipY = false;                 // StarCore UV는 이미지 왼쪽 위가 (0,0). three.js 기본은 아래가 0이라 끔
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending,
+                                          depthWrite: false, side: THREE.DoubleSide });
+  artMats.push(m);
+  artGroup.add(new THREE.Mesh(g, m));
+}
+
+// 땅: 지평선 아래를 가리는 반구 + 지평선 원
+const groundGroup = new THREE.Group();
+const ground = new THREE.Mesh(
+  new THREE.SphereGeometry(R * 0.9, 64, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x0a1410, side: THREE.BackSide, transparent: true, opacity: 0.93 }));
+ground.renderOrder = 10;
+groundGroup.add(ground);
+const ring = [];
+for (let i = 0; i <= 128; i++) { const t = i / 128 * Math.PI * 2; ring.push(Math.sin(t) * R * 0.9, 0, -Math.cos(t) * R * 0.9); }
+const ringLine = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(ring, 3)),
+  new THREE.LineBasicMaterial({ color: 0x3d6b52 }));
+ringLine.renderOrder = 11;
+groundGroup.add(ringLine);
+scene.add(groundGroup);
+
+// ───────── 라벨 (HTML을 화면 좌표에 띄움) ─────────
+const labelLayer = document.getElementById('labels');
+function makeLabel(text, cls) {
+  const el = document.createElement('div');
+  el.className = 'lbl ' + cls; el.textContent = text;
+  labelLayer.appendChild(el);
+  return el;
+}
+const conLabels = sky.labels.map(l => ({ el: makeLabel(l.ko, 'con'), v: new THREE.Vector3(...l.pos), sky: true, kind: 'con' }));
+const starLabels = sky.starNames.map(n => ({ el: makeLabel(n.name, 'star'),
+  v: new THREE.Vector3(sky.stars.pos[n.i * 3], sky.stars.pos[n.i * 3 + 1], sky.stars.pos[n.i * 3 + 2]), sky: true, kind: 'star' }));
+const dirLabels = [['북', 0], ['북동', 45], ['동', 90], ['남동', 135], ['남', 180], ['남서', 225], ['서', 270], ['북서', 315]]
+  .map(([t, az]) => ({ el: makeLabel(t, 'dir'), v: arVector(0, az), sky: false, kind: 'dir' }));
+
+// StarCore Astronomy.arVector와 같은 식
+function arVector(altDeg, azDeg) {
+  const alt = THREE.MathUtils.degToRad(altDeg), az = THREE.MathUtils.degToRad(azDeg);
+  return new THREE.Vector3(Math.cos(alt) * Math.sin(az), Math.sin(alt), -Math.cos(alt) * Math.cos(az));
+}
+
+// ───────── 시간 ─────────
+// 프레임 사이 시각은 앞뒤 행렬을 선형 보간 (2분 간격이라 오차 무시 가능)
+const F = sky.frames, nF = F.matrices.length;
+const slider = document.getElementById('t');
+slider.max = nF - 1;
+let t = 0, playing = false;
+const skyMatrix = new THREE.Matrix4();
+function setTime(x) {
+  t = Math.min(Math.max(x, 0), nF - 1);
+  const i = Math.min(Math.floor(t), nF - 2), f = t - i;
+  const a = F.matrices[i], b = F.matrices[i + 1];
+  const m = a.map((v, k) => v + (b[k] - v) * f);
+  skyMatrix.set(m[0], m[1], m[2], 0,  m[3], m[4], m[5], 0,  m[6], m[7], m[8], 0,  0, 0, 0, 1);
+  skyGroup.matrix.copy(skyMatrix);
+  skyGroup.matrixWorldNeedsUpdate = true;
+  slider.value = t;
+  const date = new Date(F.start + t * F.stepMinutes * 60000);
+  document.getElementById('time').textContent = date.toLocaleString('ko-KR', {
+    month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+slider.addEventListener('input', () => setTime(+slider.value));
+const playBtn = document.getElementById('play');
+function togglePlay() { playing = !playing; playBtn.textContent = playing ? '정지' : '재생'; }
+playBtn.onclick = togglePlay;
+document.getElementById('now').onclick = () => setTime(0);
+setTime(0);
+
+// ───────── 둘러보기 (폰 방향 대신 마우스) ─────────
+// 카메라가 보는 방향 = (고도, 방위각). 처음엔 남쪽 위 30°
+let viewAlt = 30, viewAz = 180;
+function updateCamera() {
+  viewAlt = Math.min(89.9, Math.max(-89.9, viewAlt));
+  viewAz = ((viewAz % 360) + 360) % 360;
+  camera.lookAt(arVector(viewAlt, viewAz));
+  const dir = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'][Math.round(viewAz / 45) % 8];
+  document.getElementById('hud').textContent =
+    `${dir}  방위각 ${viewAz.toFixed(0)}°  고도 ${viewAlt.toFixed(0)}°  시야 ${camera.fov.toFixed(0)}°`;
+}
+let drag = null;
+canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerup', () => drag = null);
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const k = camera.fov / innerHeight;              // 화면 1픽셀 = 몇 도
+  viewAz -= (e.clientX - drag.x) * k;
+  viewAlt += (e.clientY - drag.y) * k;
+  drag = { x: e.clientX, y: e.clientY };
+  updateCamera();
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  camera.fov = Math.min(100, Math.max(10, camera.fov * Math.exp(e.deltaY * 0.001)));
+  camera.updateProjectionMatrix(); updateCamera();
+}, { passive: false });
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const s = camera.fov / 20;
+  if (e.key === 'ArrowLeft') viewAz -= s;
+  else if (e.key === 'ArrowRight') viewAz += s;
+  else if (e.key === 'ArrowUp') viewAlt += s;
+  else if (e.key === 'ArrowDown') viewAlt -= s;
+  else if (e.key === ' ') { togglePlay(); e.preventDefault(); return; }
+  else return;
+  updateCamera();
+});
+
+// ───────── 패널 ─────────
+const $ = id => document.getElementById(id);
+const opts = {};
+for (const id of ['showStars', 'showLines', 'showArt', 'showLabels', 'showNames', 'showGround']) {
+  opts[id] = $(id).checked;
+  $(id).addEventListener('change', () => { opts[id] = $(id).checked; applyOpts(); });
+}
+function applyOpts() {
+  stars.visible = opts.showStars; lines.visible = opts.showLines;
+  artGroup.visible = opts.showArt; groundGroup.visible = opts.showGround;
+}
+function applyArtStyle() {
+  const c = new THREE.Color($('artColor').value), o = +$('artOpacity').value;
+  for (const m of artMats) { m.color.copy(c); m.opacity = o; }
+}
+$('artOpacity').addEventListener('input', applyArtStyle);
+$('artColor').addEventListener('input', applyArtStyle);
+$('hide').onclick = () => { const b = $('body'); const h = b.style.display === 'none'; b.style.display = h ? '' : 'none'; $('hide').textContent = h ? '–' : '+'; };
+applyOpts(); applyArtStyle();
+
+// ───────── 그리기 ─────────
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize(); updateCamera();
+
+const tmp = new THREE.Vector3(), fwd = new THREE.Vector3();
+function placeLabels() {
+  camera.getWorldDirection(fwd);
+  for (const L of [...conLabels, ...starLabels, ...dirLabels]) {
+    const on = L.kind === 'con' ? opts.showLabels : L.kind === 'star' ? opts.showNames && opts.showStars : true;
+    tmp.copy(L.v);
+    if (L.sky) tmp.applyMatrix4(skyMatrix);        // 적도 벡터 -> 지금 시각의 AR 방향
+    const visible = on && tmp.dot(fwd) > 0.2 && (L.kind === 'dir' || !opts.showGround || tmp.y > 0);
+    if (!visible) { L.el.style.display = 'none'; continue; }
+    tmp.multiplyScalar(R).project(camera);          // -> 화면 좌표 (-1..1)
+    L.el.style.display = '';
+    L.el.style.left = ((tmp.x + 1) / 2 * innerWidth) + 'px';
+    L.el.style.top = ((1 - tmp.y) / 2 * innerHeight) + 'px';
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (playing) {
+    setTime(t + dt * +$('speed').value / F.stepMinutes);   // speed = 초당 몇 분
+    if (t >= nF - 1) togglePlay();
+  }
+  starMat.uniforms.scale.value = +$('starScale').value * Math.sqrt(60 / camera.fov) * devicePixelRatio;
+  renderer.render(scene, camera);
+  placeLabels();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

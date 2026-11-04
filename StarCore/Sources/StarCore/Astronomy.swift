@@ -91,16 +91,30 @@ public enum Astronomy {
         return Vector3(x: cos(alt) * sin(az), y: sin(alt), z: -cos(alt) * cos(az))
     }
 
+    /// 적도좌표(J2000) 단위 벡터 -> AR 벡터로 보내는 3×3 회전 행렬 (행 우선: m[행][열]).
+    ///
+    /// 세차 보정도, 적도->지평 변환도 결국 "회전"이라서 하늘 전체가 행렬 하나로 같이 돈다.
+    /// 그래서 별 5,000개를 매 프레임 `horizontal`로 변환하는 대신,
+    /// 별은 고정된 적도 벡터(`unitVector`)로 한 번만 만들어 두고 프레임마다 이 행렬만 바꾸면 된다.
+    /// (앱에서는 별, 선, 그림을 담은 부모 노드의 회전으로 쓰기. 대기굴절은 이 방식에 포함 안 됨)
+    ///
+    /// 구하는 법: 행렬의 각 열 = 축 방향 벡터(x, y, z축)를 변환한 결과
+    public static func equatorialToAR(context: Context) -> [[Double]] {
+        let axes = [(ra: 0.0, dec: 0.0), (ra: 90.0, dec: 0.0), (ra: 0.0, dec: 90.0)]  // x, y, z축
+        let cols = axes.map { arVector(horizontal(ra: $0.ra, dec: $0.dec, context: context)) }
+        return [cols.map(\.x), cols.map(\.y), cols.map(\.z)]
+    }
+
     // MARK: - 적도좌표 <-> 3D 벡터 (적도 기준: x = 춘분점, z = 천구 북극)
 
     /// 적경/적위 -> 단위 벡터 [x, y, z]
-    static func unitVector(ra: Double, dec: Double) -> [Double] {
+    public static func unitVector(ra: Double, dec: Double) -> [Double] {
         let a = rad(ra), d = rad(dec)
         return [cos(d) * cos(a), cos(d) * sin(a), sin(d)]
     }
 
     /// 벡터 -> 적경/적위 (길이는 상관없음)
-    static func equatorial(x: Double, y: Double, z: Double) -> Equatorial {
+    public static func equatorial(x: Double, y: Double, z: Double) -> Equatorial {
         Equatorial(ra: normalize(deg(atan2(y, x))), dec: deg(atan2(z, (x * x + y * y).squareRoot())))
     }
 
