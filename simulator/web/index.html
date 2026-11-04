@@ -5,40 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Star Finder 시뮬레이터</title>
 <style>
-  :root { --gold: #ffc061; --panel: rgba(10, 16, 30, 0.82); --text: #dfe6f3; --muted: #8b97ad; }
+  :root { --gold: #ffc061; --panel: rgba(10, 16, 30, 0.82); --text: #dfe6f3; --muted: #8b97ad; --line: #33415f; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #02040a; color: var(--text);
                font: 13px/1.4 "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
   canvas { display: block; cursor: grab; touch-action: none; }
   canvas:active { cursor: grabbing; }
   #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-  .lbl { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; text-shadow: 0 0 4px #000; }
-  .lbl.con { color: var(--gold); font-size: 13px; opacity: 0.9; }
+  .lbl { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+  .lbl.con { color: var(--gold); font-size: 13px; opacity: 0.85; }
+  .lbl.con.cur { font-size: 16px; font-weight: bold; opacity: 1; }
+  .lbl.kor { font-size: 11px; opacity: 0.75; }
+  .lbl.kor small { font-size: 0.85em; opacity: 0.8; margin-left: 2px; }
+  .lbl.kor.main { font-size: 14px; font-weight: bold; opacity: 0.95; }
+  .lbl.kor.cur { font-size: 16px; font-weight: bold; opacity: 1; }
   .lbl.star { color: #cfe0ff; font-size: 11px; transform: translate(6px, -50%); opacity: 0.8; }
   .lbl.dir { color: #ff8a7a; font-weight: bold; font-size: 15px; }
-  #panel { position: fixed; top: 12px; left: 12px; width: 250px; padding: 12px 14px; border-radius: 10px;
-           background: var(--panel); backdrop-filter: blur(6px); }
+  #panel { position: fixed; top: 12px; left: 12px; width: 260px; padding: 12px 14px; border-radius: 10px;
+           background: var(--panel); backdrop-filter: blur(6px); max-height: calc(100% - 24px); overflow: auto; box-sizing: border-box; }
   #panel h1 { font-size: 14px; margin: 0 0 8px; color: var(--gold); }
   #panel .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
   #panel input[type=range] { width: 130px; }
   #panel .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin: 8px 0; }
-  #panel button { background: #1c2740; color: var(--text); border: 1px solid #33415f; border-radius: 6px;
+  #panel button { background: #1c2740; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
                   padding: 4px 10px; cursor: pointer; font: inherit; }
+  .tabs { display: flex; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .tabs button { flex: 1; border: 0 !important; border-radius: 0 !important; padding: 6px 4px !important; background: transparent !important; color: var(--muted) !important; }
+  .tabs button.on { background: #2a3a5e !important; color: #fff !important; font-weight: bold; }
+  #legend { display: none; margin: 0 0 8px; font-size: 12px; }
+  #legend div { display: flex; align-items: center; gap: 6px; }
+  #legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   #time { font-size: 15px; font-variant-numeric: tabular-nums; }
   #hud { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 8px;
-         background: var(--panel); font-variant-numeric: tabular-nums; color: var(--muted); }
-  #hide { position: absolute; top: 8px; right: 10px; padding: 0 6px; }
+         background: var(--panel); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  #here { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 10px;
+          background: var(--panel); text-align: center; min-width: 180px; pointer-events: none; }
+  #here .k { font-size: 11px; color: var(--muted); }
+  #here .v { font-size: 20px; font-weight: bold; color: var(--gold); }
+  #here .s { font-size: 12px; color: var(--muted); }
+  #cross { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 1.5px solid rgba(255,255,255,0.5);
+           border-radius: 50%; pointer-events: none; }
+  #cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; background: rgba(255,255,255,0.7); border-radius: 50%; }
+  #hide { position: absolute; top: 8px; right: 10px; padding: 0 6px !important; }
   #err { position: fixed; inset: 0; display: none; place-items: center; padding: 16px; text-align: center; }
-  @media (max-width: 600px) { #panel { width: auto; right: 12px; } }
+  @media (max-width: 700px) { #panel { width: auto; right: 12px; top: auto; bottom: 56px; max-height: 45%; } #here { top: 8px; } }
 </style>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="labels"></div>
+<div id="cross"></div>
+<div id="here"><div class="k">지금 보는 곳</div><div class="v">-</div><div class="s"></div></div>
 <div id="panel">
   <button id="hide" title="패널 접기">–</button>
   <h1>Star Finder 시뮬레이터</h1>
   <div id="body">
+    <div class="tabs">
+      <button data-mode="western" class="on">서양 별자리</button>
+      <button data-mode="korean">천상열차분야지도</button>
+    </div>
+    <div id="legend"></div>
     <div id="time">-</div>
     <div class="row"><input id="t" type="range" min="0" step="0.01" style="width:100%"></div>
     <div class="row">
@@ -48,7 +74,7 @@
     <div class="toggles">
       <label><input type="checkbox" id="showStars" checked> 별</label>
       <label><input type="checkbox" id="showLines" checked> 별자리 선</label>
-      <label><input type="checkbox" id="showArt" checked> 그림</label>
+      <label id="artToggle"><input type="checkbox" id="showArt" checked> 그림</label>
       <label><input type="checkbox" id="showLabels" checked> 별자리 이름</label>
       <label><input type="checkbox" id="showNames" checked> 별 이름</label>
       <label><input type="checkbox" id="showGround" checked> 땅</label>
@@ -56,7 +82,7 @@
     <div class="row">그림 밝기 <input id="artOpacity" type="range" min="0" max="1" step="0.01" value="0.35"></div>
     <div class="row">별 크기 <input id="starScale" type="range" min="0.3" max="3" step="0.01" value="1"></div>
     <div class="row">그림 색 <input id="artColor" type="color" value="#ffc061"></div>
-    <div style="color:var(--muted);margin-top:8px">드래그: 둘러보기 · 휠: 확대/축소<br>방향키: 둘러보기 · 스페이스: 재생</div>
+    <div style="color:var(--muted);margin-top:8px">드래그: 둘러보기 · 휠: 확대/축소<br>방향키: 둘러보기 · 스페이스: 재생<br>가운데 동그라미 = 폰 카메라 가운데</div>
   </div>
 </div>
 <div id="hud">-</div>
@@ -79,10 +105,13 @@ try {
 }
 const ART_DIR = '../../assets/constellations-outline/';
 const R = 100;                       // 천구 반지름 (앱과 같은 100m)
+const $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 
 // ───────── 장면 ─────────
 // three.js 좌표계 = ARKit .gravityAndHeading과 같음: +x 동, +y 위, -z 북. 그래서 StarCore 결과를 그대로 쓴다.
-const canvas = document.getElementById('c');
+const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(devicePixelRatio);
 const scene = new THREE.Scene();
@@ -95,9 +124,9 @@ skyGroup.matrixAutoUpdate = false;
 scene.add(skyGroup);
 
 // 별: 점 하나 = 별 하나. 크기/색은 StarCore Appearance 결과
-const nStars = sky.stars.size.length;
+const P = sky.stars.pos;
 const starGeo = new THREE.BufferGeometry();
-starGeo.setAttribute('position', new THREE.Float32BufferAttribute(sky.stars.pos.map(v => v * R), 3));
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(P.map(v => v * R), 3));
 starGeo.setAttribute('starColor', new THREE.Float32BufferAttribute(sky.stars.color, 3));
 starGeo.setAttribute('size', new THREE.Float32BufferAttribute(sky.stars.size, 1));
 const starMat = new THREE.ShaderMaterial({
@@ -122,23 +151,41 @@ const stars = new THREE.Points(starGeo, starMat);
 stars.renderOrder = 2;
 skyGroup.add(stars);
 
-// 별자리 선
-const linePos = [];
-for (let k = 0; k < sky.lines.length; k++) {
-  const i = sky.lines[k] * 3;
-  linePos.push(sky.stars.pos[i] * R, sky.stars.pos[i + 1] * R, sky.stars.pos[i + 2] * R);
-}
-const lineGeo = new THREE.BufferGeometry();
-lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
-const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
-  color: 0x7fa2e0, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
-lines.renderOrder = 1;
-skyGroup.add(lines);
+// ───────── 별자리 체계 두 가지 (서양 / 천상열차분야지도) ─────────
+const DIRS = sky.directions;                         // 오방색: 중앙 황, 동방 청, 북방 흑(보라로), 서방 백, 남방 적
+const WEST_LINE = [0.5, 0.64, 0.88];
+function conColor(culture, con) { return culture === sky.korean ? DIRS[con.dir].color : WEST_LINE; }
 
-// 별자리 그림: StarCore ArtMesh(위치, UV, 삼각형) 그대로 메시로
+// 선분들을 LineSegments 하나로. 별자리마다 색이 다를 수 있어서 꼭짓점 색(vertexColors)을 쓴다
+function segmentsMesh(culture, onlyCon, bright) {
+  const pos = [], col = [];
+  for (let k = 0; k < culture.lineCon.length; k++) {
+    const ci = culture.lineCon[k];
+    if (onlyCon != null && ci !== onlyCon) continue;
+    const c = conColor(culture, culture.cons[ci]).map(v => v * bright);
+    for (const i of [culture.lines[2 * k], culture.lines[2 * k + 1]]) {
+      pos.push(P[3 * i] * R, P[3 * i + 1] * R, P[3 * i + 2] * R);
+      col.push(...c);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  m.renderOrder = 1;
+  return m;
+}
+const westLines = segmentsMesh(sky.western, null, 0.5);
+const korLines = segmentsMesh(sky.korean, null, 0.75);
+skyGroup.add(westLines, korLines);
+let highlight = null;                                // 지금 보는 별자리만 밝게 다시 그린 선
+
+// 별자리 그림 (서양만): StarCore ArtMesh(위치, UV, 삼각형) 그대로 메시로
 const artGroup = new THREE.Group();
 skyGroup.add(artGroup);
-const artMats = [];
+const artByCon = new Map();                          // 서양 별자리 번호 -> 그림 재질
+const westIndex = new Map(sky.western.cons.map((c, i) => [c.id, i]));
 const loader = new THREE.TextureLoader();
 for (const a of sky.art) {
   const g = new THREE.BufferGeometry();
@@ -150,7 +197,7 @@ for (const a of sky.art) {
   tex.colorSpace = THREE.SRGBColorSpace;
   const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending,
                                           depthWrite: false, side: THREE.DoubleSide });
-  artMats.push(m);
+  artByCon.set(westIndex.get(a.id), m);
   artGroup.add(new THREE.Mesh(g, m));
 }
 
@@ -170,16 +217,22 @@ groundGroup.add(ringLine);
 scene.add(groundGroup);
 
 // ───────── 라벨 (HTML을 화면 좌표에 띄움) ─────────
-const labelLayer = document.getElementById('labels');
-function makeLabel(text, cls) {
+const labelLayer = $('labels');
+function makeLabel(html, cls, color) {
   const el = document.createElement('div');
-  el.className = 'lbl ' + cls; el.textContent = text;
+  el.className = 'lbl ' + cls; el.innerHTML = html;
+  if (color) el.style.color = color;
   labelLayer.appendChild(el);
   return el;
 }
-const conLabels = sky.labels.map(l => ({ el: makeLabel(l.ko, 'con'), v: new THREE.Vector3(...l.pos), sky: true, kind: 'con' }));
-const starLabels = sky.starNames.map(n => ({ el: makeLabel(n.name, 'star'),
-  v: new THREE.Vector3(sky.stars.pos[n.i * 3], sky.stars.pos[n.i * 3 + 1], sky.stars.pos[n.i * 3 + 2]), sky: true, kind: 'star' }));
+const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
+const esc = s => s.replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[ch]);
+const westLabels = sky.western.cons.map((c, i) => c.pos && ({ i, el: makeLabel(esc(c.ko), 'con'), v: new THREE.Vector3(...c.pos), sky: true, kind: 'west' })).filter(Boolean);
+const korLabels = sky.korean.cons.map((c, i) => c.pos && ({ i, main: c.main,
+  el: makeLabel(`${esc(c.ko)}<small>${esc(c.hanja || '')}</small>`, 'kor' + (c.main ? ' main' : ''), css(DIRS[c.dir].color)),
+  v: new THREE.Vector3(...c.pos), sky: true, kind: 'kor' })).filter(Boolean);
+const starLabels = sky.starNames.map(n => ({ el: makeLabel(esc(n.name), 'star'),
+  v: new THREE.Vector3(P[n.i * 3], P[n.i * 3 + 1], P[n.i * 3 + 2]), sky: true, kind: 'star' }));
 const dirLabels = [['북', 0], ['북동', 45], ['동', 90], ['남동', 135], ['남', 180], ['남서', 225], ['서', 270], ['북서', 315]]
   .map(([t, az]) => ({ el: makeLabel(t, 'dir'), v: arVector(0, az), sky: false, kind: 'dir' }));
 
@@ -189,32 +242,53 @@ function arVector(altDeg, azDeg) {
   return new THREE.Vector3(Math.cos(alt) * Math.sin(az), Math.sin(alt), -Math.cos(alt) * Math.cos(az));
 }
 
+// ───────── "지금 보는 곳" 판정 표 ─────────
+// StarSim이 StarCore로 하늘 1° 칸마다 미리 판정해 둔 표. 칸 번호 = floor(적위+90)*360 + floor(적경)
+const bytes = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+const GRID = { western: bytes(sky.grid.western), korean: new Uint16Array(bytes(sky.grid.korean).buffer), mansion: bytes(sky.grid.mansion) };
+
 // ───────── 시간 ─────────
 // 프레임 사이 시각은 앞뒤 행렬을 선형 보간 (2분 간격이라 오차 무시 가능)
 const F = sky.frames, nF = F.matrices.length;
-const slider = document.getElementById('t');
+const slider = $('t');
 slider.max = nF - 1;
 let t = 0, playing = false;
+let M = F.matrices[0];                               // 지금 시각의 회전 행렬 (행 우선 9개)
 const skyMatrix = new THREE.Matrix4();
 function setTime(x) {
   t = Math.min(Math.max(x, 0), nF - 1);
   const i = Math.min(Math.floor(t), nF - 2), f = t - i;
   const a = F.matrices[i], b = F.matrices[i + 1];
-  const m = a.map((v, k) => v + (b[k] - v) * f);
-  skyMatrix.set(m[0], m[1], m[2], 0,  m[3], m[4], m[5], 0,  m[6], m[7], m[8], 0,  0, 0, 0, 1);
+  M = a.map((v, k) => v + (b[k] - v) * f);
+  skyMatrix.set(M[0], M[1], M[2], 0,  M[3], M[4], M[5], 0,  M[6], M[7], M[8], 0,  0, 0, 0, 1);
   skyGroup.matrix.copy(skyMatrix);
   skyGroup.matrixWorldNeedsUpdate = true;
   slider.value = t;
   const date = new Date(F.start + t * F.stepMinutes * 60000);
-  document.getElementById('time').textContent = date.toLocaleString('ko-KR', {
+  $('time').textContent = date.toLocaleString('ko-KR', {
     month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }
 slider.addEventListener('input', () => setTime(+slider.value));
-const playBtn = document.getElementById('play');
+const playBtn = $('play');
 function togglePlay() { playing = !playing; playBtn.textContent = playing ? '정지' : '재생'; }
 playBtn.onclick = togglePlay;
-document.getElementById('now').onclick = () => setTime(0);
+$('now').onclick = () => setTime(0);
 setTime(0);
+
+// AR 방향 -> 하늘 주소(J2000). StarCore Astronomy.equatorial(fromAR:)와 같은 계산:
+// 회전 행렬을 되돌리는 건 전치 행렬(행과 열 바꾸기)을 곱하는 것
+function toEquatorial(v) {
+  const a = [v.x, v.y, v.z];
+  const e = [0, 1, 2].map(c => M[c] * a[0] + M[3 + c] * a[1] + M[6 + c] * a[2]);
+  const ra = (THREE.MathUtils.radToDeg(Math.atan2(e[1], e[0])) + 360) % 360;
+  const dec = THREE.MathUtils.radToDeg(Math.atan2(e[2], Math.hypot(e[0], e[1])));
+  return { ra, dec };
+}
+function lookup(v) {
+  const { ra, dec } = toEquatorial(v);
+  const cell = Math.min(179, Math.max(0, Math.floor(dec + 90))) * 360 + Math.floor(ra) % 360;
+  return { west: GRID.western[cell] - 1, kor: GRID.korean[cell] - 1, mansion: GRID.mansion[cell] };
+}
 
 // ───────── 둘러보기 (폰 방향 대신 마우스) ─────────
 // 카메라가 보는 방향 = (고도, 방위각). 처음엔 남쪽 위 30°
@@ -224,8 +298,7 @@ function updateCamera() {
   viewAz = ((viewAz % 360) + 360) % 360;
   camera.lookAt(arVector(viewAlt, viewAz));
   const dir = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'][Math.round(viewAz / 45) % 8];
-  document.getElementById('hud').textContent =
-    `${dir}  방위각 ${viewAz.toFixed(0)}°  고도 ${viewAlt.toFixed(0)}°  시야 ${camera.fov.toFixed(0)}°`;
+  $('hud').textContent = `${dir}  방위각 ${viewAz.toFixed(0)}°  고도 ${viewAlt.toFixed(0)}°  시야 ${camera.fov.toFixed(0)}°`;
 }
 let drag = null;
 canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
@@ -256,24 +329,67 @@ addEventListener('keydown', e => {
 });
 
 // ───────── 패널 ─────────
-const $ = id => document.getElementById(id);
+let mode = store.get('mode') === 'korean' ? 'korean' : 'western';
+let current = null;                                  // 지금 보는 곳 { west, kor, mansion }
 const opts = {};
 for (const id of ['showStars', 'showLines', 'showArt', 'showLabels', 'showNames', 'showGround']) {
   opts[id] = $(id).checked;
   $(id).addEventListener('change', () => { opts[id] = $(id).checked; applyOpts(); });
 }
 function applyOpts() {
-  stars.visible = opts.showStars; lines.visible = opts.showLines;
-  artGroup.visible = opts.showArt; groundGroup.visible = opts.showGround;
+  const west = mode === 'western';
+  stars.visible = opts.showStars;
+  westLines.visible = west && opts.showLines;
+  korLines.visible = !west && opts.showLines;
+  if (highlight) highlight.visible = opts.showLines;
+  artGroup.visible = west && opts.showArt;
+  groundGroup.visible = opts.showGround;
+  $('artToggle').style.opacity = west ? 1 : 0.4;
+  $('legend').style.display = west ? 'none' : 'block';
 }
+for (const b of document.querySelectorAll('.tabs button')) {
+  b.onclick = () => { mode = b.dataset.mode; store.set('mode', mode); syncTabs(); current = null; applyOpts(); };
+}
+function syncTabs() { for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.mode === mode); }
+$('legend').innerHTML = DIRS.map((d, i) =>
+  `<div><i style="background:${css(d.color)}"></i>${d.name} ${d.guardian || '3원'} · ${d.colorName}${i === 2 ? ' (화면에선 보라)' : ''}</div>`).join('');
 function applyArtStyle() {
   const c = new THREE.Color($('artColor').value), o = +$('artOpacity').value;
-  for (const m of artMats) { m.color.copy(c); m.opacity = o; }
+  for (const [ci, m] of artByCon) { m.color.copy(c); m.opacity = ci === current?.west ? Math.min(1, o * 2.2) : o; }
 }
 $('artOpacity').addEventListener('input', applyArtStyle);
 $('artColor').addEventListener('input', applyArtStyle);
 $('hide').onclick = () => { const b = $('body'); const h = b.style.display === 'none'; b.style.display = h ? '' : 'none'; $('hide').textContent = h ? '–' : '+'; };
-applyOpts(); applyArtStyle();
+syncTabs(); applyOpts(); applyArtStyle();
+
+// ───────── 지금 보는 곳 ─────────
+const fwd = new THREE.Vector3();
+function updateHere() {
+  camera.getWorldDirection(fwd);                     // 화면 가운데(= 폰 카메라 가운데)가 보는 방향
+  const now = lookup(fwd);
+  const keyOf = c => mode === 'western' ? c.west : c.kor * 100 + c.mansion;
+  if (current && keyOf(now) === keyOf(current)) return;   // 바뀐 게 없으면 그대로
+  current = now;
+  // 강조 선 다시 만들기
+  if (highlight) { skyGroup.remove(highlight); highlight.geometry.dispose(); highlight = null; }
+  const culture = mode === 'western' ? sky.western : sky.korean;
+  const ci = mode === 'western' ? now.west : now.kor;
+  if (ci >= 0) { highlight = segmentsMesh(culture, ci, 1.6); highlight.renderOrder = 3; skyGroup.add(highlight); }
+  applyOpts(); applyArtStyle();
+  // 위쪽 표시
+  const v = document.querySelector('#here .v'), s = document.querySelector('#here .s');
+  if (mode === 'western') {
+    const c = sky.western.cons[now.west];
+    v.textContent = c ? c.ko : '-'; v.style.color = '';
+    s.textContent = c ? `${c.en} · IAU 공식 경계 기준` : '';
+  } else {
+    const m = sky.mansions[now.mansion - 1], d = m && DIRS[m.dir];
+    const c = now.kor >= 0 ? sky.korean.cons[now.kor] : null;
+    v.textContent = c ? `${c.ko}(${c.hanja || ''})` : '(근처 별자리 없음)';
+    v.style.color = c ? css(DIRS[c.dir].color) : 'var(--muted)';
+    s.textContent = m ? `${d.name} ${d.guardian} · ${m.name}` : '';
+  }
+}
 
 // ───────── 그리기 ─────────
 function resize() {
@@ -282,11 +398,19 @@ function resize() {
 }
 addEventListener('resize', resize); resize(); updateCamera();
 
-const tmp = new THREE.Vector3(), fwd = new THREE.Vector3();
+const tmp = new THREE.Vector3();
 function placeLabels() {
-  camera.getWorldDirection(fwd);
-  for (const L of [...conLabels, ...starLabels, ...dirLabels]) {
-    const on = L.kind === 'con' ? opts.showLabels : L.kind === 'star' ? opts.showNames && opts.showStars : true;
+  const west = mode === 'western';
+  for (const L of [...westLabels, ...korLabels, ...starLabels, ...dirLabels]) {
+    let on;
+    if (L.kind === 'west') { on = west && opts.showLabels; L.el.classList.toggle('cur', L.i === current?.west); }
+    else if (L.kind === 'kor') {
+      const cur = L.i === current?.kor;
+      on = !west && opts.showLabels && (L.main || cur || camera.fov < 45);   // 312개라 넓게 볼 땐 28수 대표만
+      L.el.classList.toggle('cur', cur);
+    }
+    else if (L.kind === 'star') on = opts.showNames && opts.showStars;
+    else on = true;
     tmp.copy(L.v);
     if (L.sky) tmp.applyMatrix4(skyMatrix);        // 적도 벡터 -> 지금 시각의 AR 방향
     const visible = on && tmp.dot(fwd) > 0.2 && (L.kind === 'dir' || !opts.showGround || tmp.y > 0);
@@ -306,6 +430,7 @@ function frame(now) {
     if (t >= nF - 1) togglePlay();
   }
   starMat.uniforms.scale.value = +$('starScale').value * Math.sqrt(60 / camera.fov) * devicePixelRatio;
+  updateHere();
   renderer.render(scene, camera);
   placeLabels();
   requestAnimationFrame(frame);

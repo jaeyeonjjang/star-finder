@@ -36,6 +36,8 @@ star-finder/
     ├── Sources/StarCore/Appearance.swift # 등급->크기, 색지수->RGB
     ├── Sources/StarCore/Labels.swift     # 별자리 이름 라벨 위치(구면 중심)
     ├── Sources/StarCore/Art.swift        # 별자리 그림: 기준점 3개 -> 3×3 행렬 -> 격자 메시
+    ├── Sources/StarCore/KoreanSky.swift  # 천상열차분야지도: 3원 28수(KoreanGroup), 오방색(Direction)
+    ├── Sources/StarCore/Locate.swift     # 지금 보는 곳: IAU 경계선(울타리 세기), 28수, 가까운 별자리
     └── Tests/StarCoreTests/              # astropy 기준값 + 실제 stars.json으로 검증 (허용 오차 0.05°)
 ```
 
@@ -43,7 +45,11 @@ star-finder/
 - StarCore에는 ARKit, CoreLocation, simd 등 애플 전용 프레임워크를 넣지 않는다 (WSL에서 빌드돼야 함).
 - 별 좌표는 J2000 기준(도 단위). 세차 보정은 `Astronomy.Context`에서 처리. 대기굴절은 `Astronomy.refracted(_:)`로 따로 적용 (`horizontal`은 기하학적 위치).
 - 크기 지수(0.12), 색 채도(0.6)는 튜닝 값. 실기기에서 보고 조정.
-- 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선(CC BY-SA 4.0), Stellarium 그림(Free Art License), d3-celestial(BSD-3). 앱에 출처 표기 필요.
+- 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선·경계선(CC BY-SA 4.0), Stellarium 그림(Free Art License), d3-celestial(BSD-3). 앱에 출처 표기 필요.
+- **한국 전통 별자리(Stellarium korean)는 GPL-2.0** — 공부용은 괜찮지만 앱 출시 시 소스 공개 의무 검토 필요.
+- 한국 데이터 정리: id 중복 H19(여상/종대부) -> 종대부는 H19b. 카탈로그에 없는 별(HIP 55203, 78727)에서는 선을 끊음.
+- 28수 자삼 역전: 자수(20) 폭이 음수라 판정에서 건너뜀 (지금 하늘엔 27수).
+- 소스 코드 바꿀 때마다 `docs/StarCore-가이드.md` 같이 갱신 (사용자 요청).
 - 그림 스타일: 윤곽선(흰 선 + 번짐, 검은 배경). 앱에서 금색으로 물들이고 가산 합성. 감도 기본값 ink=12.
 - 하늘 전체 = 회전 하나: `Astronomy.equatorialToAR(context:)`. 앱에서도 별/선/그림을 부모 노드 하나에 넣고 그 회전만 프레임마다 바꾼다 (시뮬레이터가 이 방식).
 - 그림 UV는 이미지 왼쪽 위 원점. RealityKit에서 뒤집혀 보이면 v를 1-v로, 안 보이면 삼각형 방향(컬링) 확인.
@@ -57,6 +63,8 @@ star-finder/
 - [x] (WSL) 별자리 그림 85장(88개 별자리 모두 덮음 — Car=아르고호 전체, Oph에 뱀 포함): 데이터 + 메시 계산 + 미리보기로 위치 확인 (테스트 28개)
 - [x] (WSL) 그림 윤곽선 스타일 변환 85장
 - [x] (WSL) 브라우저 시뮬레이터 (`simulator/run.sh`), 하늘 회전 행렬 (테스트 29개)
+- [x] (WSL) 한국 전통 별자리 312개 + 서양/한국 탭 (시뮬레이터)
+- [x] (WSL) 지금 보는 곳 판정: 서양 IAU 경계선, 한국 28수 + 가까운 별자리 (테스트 47개)
 - [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
 - [ ] (맥) 별자리 그림 표시 (MeshDescriptor + UnlitMaterial, 금색, 가산 합성)

@@ -63,5 +63,7 @@ let meshes = catalog.artMeshes()               // ["Ori": ArtMesh(positions:uvs:
 - Stellarium modern sky culture (별자리 선) — CC BY-SA 4.0
 - Stellarium modern sky culture (별자리 그림, `assets/constellations/`) — Free Art License
 - d3-celestial (별자리 한국어 이름) — BSD-3-Clause
+- Stellarium korean sky culture (천상열차분야지도 별자리) — GPL-2.0
+- 별자리 경계선 (IAU, Stellarium modern sky culture 경유) — CC BY-SA 4.0
 
 앱 출시 시 앱 내 정보 화면에 출처 표기 필요.

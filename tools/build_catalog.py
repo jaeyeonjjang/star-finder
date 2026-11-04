@@ -23,6 +23,36 @@ def fetch(url: str) -> str:
         return r.read().decode("utf-8")
 
 
+def hms(s):
+    """'22:52:00' (시:분:초) -> 도"""
+    h, m, sec = map(float, s.split(":"))
+    return (h + m / 60 + sec / 3600) * 15
+
+
+def dms(s):
+    """'+34:30:00' (도:분:초) -> 도"""
+    sign = -1 if s[0] == "-" else 1
+    d, m, sec = map(float, s[1:].split(":"))
+    return sign * (d + m / 60 + sec / 3600)
+
+
+def parse_boundaries(edges, ids):
+    """IAU 별자리 경계선 (B1875 좌표). 경계선은 전부 가로선(적위 일정) 아니면 세로선(적경 일정)이다.
+    원본 한 줄: '001:002 M+ 22:52:00 +34:30:00 22:52:00 +52:30:00 AND LAC'
+                       종류 시작 적경  시작 적위  끝 적경   끝 적위  양쪽 별자리"""
+    by_upper = {i.upper(): i for i in ids}
+    by_upper.update({"SER1": "Ser", "SER2": "Ser"})     # 뱀자리 머리/꼬리는 하나로
+    parallels, meridians = [], []
+    for e in edges:
+        _, kind, ra1, dec1, ra2, dec2, a, b = e.split()
+        a, b = by_upper[a], by_upper[b]
+        if kind[0] == "P":   # 가로선: 적위 dec에서 적경 ra1 -> ra2 (동쪽으로)
+            parallels.append({"dec": round(dms(dec1), 4), "ra1": round(hms(ra1), 4), "ra2": round(hms(ra2), 4), "a": a, "b": b})
+        else:                # 세로선: 적경 ra에서 적위 dec1 -> dec2
+            meridians.append({"ra": round(hms(ra1), 4), "dec1": round(dms(dec1), 4), "dec2": round(dms(dec2), 4), "a": a, "b": b})
+    return {"epoch": "B1875", "parallels": parallels, "meridians": meridians}
+
+
 def parse_lines(raw):
     """Stellarium 선 목록 -> HIP 번호만 남긴 꺾은선 목록.
     "DSO:M44" 같은 별 아닌 천체는 빼고, 점이 2개 미만인 선은 버린다.
@@ -92,6 +122,9 @@ def main():
             line_hips.update(a["hip"] for a in entry["art"]["anchors"])
         constellations.append(entry)
 
+    # 1-1) 별자리 경계선 ("지금 어느 별자리를 보고 있나" 판정용, StarCore/Locate.swift)
+    boundaries = parse_boundaries(sky["edges"], [c["id"] for c in constellations])
+
     # 2) 한국어/영어 이름
     names = {f["id"]: f["properties"] for f in json.loads(fetch(NAMES_URL))["features"]}
     for c in constellations:
@@ -104,7 +137,11 @@ def main():
     #   원본에 id가 겹치는 게 있어서(H19: 여상, 종대부) 두 번째부터 b, c...를 붙인다.
     #   종대부(宗大夫)는 천상열차분야지도가 중국 목록에 더한, 한국 지도에만 있는 별자리
     korean, seen = [], set()
-    for c in json.loads(fetch(KOREAN_URL))["constellations"]:
+    korean_sky = json.loads(fetch(KOREAN_URL))
+    # 28수의 거성(距星): 각 수의 시작을 정하는 기준 별 28개 (각수 = 스피카부터)
+    mansion_stars = [int(h) for h in korean_sky["lunar_system"]["defining_stars"]]
+    line_hips.update(mansion_stars)
+    for c in korean_sky["constellations"]:
         ko, hanja = split_korean_name(c["common_name"]["native"])
         lines = parse_lines(c.get("lines", []))
         for seg in lines:
@@ -164,9 +201,9 @@ def main():
         del art["path"]
 
     stars.sort(key=lambda s: s["mag"])
-    out = {"epoch": "J2000", "stars": stars, "constellations": constellations,
+    out = {"epoch": "J2000", "stars": stars, "constellations": constellations, "boundaries": boundaries,
            "skyCultures": {"korean": {"name": "한국 전통 (천상열차분야지도)", "license": "GPL-2.0",
-                                      "constellations": korean}}}
+                                      "constellations": korean, "mansionStars": mansion_stars}}}
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     print(f"완료: 별 {len(stars)}개, 별자리 {len(constellations)}개 + 한국 전통 {len(korean)}개 -> {args.out}")

@@ -26,30 +26,52 @@ public enum Astronomy {
     public struct Context: Sendable {
         let lst: Double            // 지방 항성시 (rad)
         let sinLat: Double, cosLat: Double
-        let zeta: Double, z: Double, sinTheta: Double, cosTheta: Double
+        let precession: Precession // J2000 -> 관측 시점
 
         public init(date: Date, observer: Observer) {
             let t = (Astronomy.julianDate(date) - 2451545.0) / 36525.0
-            let arcsec = Double.pi / 180.0 / 3600.0
-            zeta = (2306.2181 * t + 0.30188 * t * t) * arcsec
-            z = (2306.2181 * t + 1.09468 * t * t) * arcsec
-            let theta = (2004.3109 * t - 0.42665 * t * t) * arcsec
-            sinTheta = sin(theta); cosTheta = cos(theta)
+            precession = Precession(centuries: t)
             lst = Astronomy.rad(Astronomy.gmst(date) + observer.longitude)
             sinLat = sin(Astronomy.rad(observer.latitude)); cosLat = cos(Astronomy.rad(observer.latitude))
         }
     }
 
+    // MARK: - 세차
+
+    /// 세차 보정: J2000 주소 -> 다른 시점의 주소 (IAU 1976 공식).
+    /// 자전축이 J2000부터 t세기(1세기 = 100년) 동안 돌아간 양을 각도 세 개(zeta, z, theta)로 나타낸다.
+    /// t가 음수면 과거 쪽 (예: 1875년 = -1.25세기)
+    struct Precession: Sendable {
+        let zeta: Double, z: Double, sinTheta: Double, cosTheta: Double
+
+        init(centuries t: Double) {
+            let arcsec = Double.pi / 180.0 / 3600.0
+            zeta = (2306.2181 * t + 0.30188 * t * t) * arcsec
+            z = (2306.2181 * t + 1.09468 * t * t) * arcsec
+            let theta = (2004.3109 * t - 0.42665 * t * t) * arcsec
+            sinTheta = sin(theta); cosTheta = cos(theta)
+        }
+
+        /// (적경, 적위) 라디안 -> 그 시점의 (적경, 적위) 라디안
+        func apply(ra a0: Double, dec d0: Double) -> (ra: Double, dec: Double) {
+            let cosD0 = cos(d0), sinD0 = sin(d0)
+            let A = cosD0 * sin(a0 + zeta)
+            let B = cosTheta * cosD0 * cos(a0 + zeta) - sinTheta * sinD0
+            let C = sinTheta * cosD0 * cos(a0 + zeta) + cosTheta * sinD0
+            return (atan2(A, B) + z, asin(max(-1, min(1, C))))
+        }
+    }
+
+    /// J2000 좌표를 t세기 뒤(음수면 앞)의 좌표로 (도 단위)
+    public static func precess(_ p: Equatorial, centuries t: Double) -> Equatorial {
+        let r = Precession(centuries: t).apply(ra: rad(p.ra), dec: rad(p.dec))
+        return Equatorial(ra: normalize(deg(r.ra)), dec: deg(r.dec))
+    }
+
     /// 별 하나의 지평좌표
     public static func horizontal(ra: Double, dec: Double, context c: Context) -> Horizontal {
         // 1) 세차: J2000 -> 관측 시점
-        let a0 = rad(ra), d0 = rad(dec)
-        let cosD0 = cos(d0), sinD0 = sin(d0)
-        let A = cosD0 * sin(a0 + c.zeta)
-        let B = c.cosTheta * cosD0 * cos(a0 + c.zeta) - c.sinTheta * sinD0
-        let C = c.sinTheta * cosD0 * cos(a0 + c.zeta) + c.cosTheta * sinD0
-        let raNow = atan2(A, B) + c.z
-        let decNow = asin(max(-1, min(1, C)))
+        let (raNow, decNow) = c.precession.apply(ra: rad(ra), dec: rad(dec))
 
         // 2) 시간각 -> 고도/방위각
         let h = c.lst - raNow
@@ -103,6 +125,18 @@ public enum Astronomy {
         let axes = [(ra: 0.0, dec: 0.0), (ra: 90.0, dec: 0.0), (ra: 0.0, dec: 90.0)]  // x, y, z축
         let cols = axes.map { arVector(horizontal(ra: $0.ra, dec: $0.dec, context: context)) }
         return [cols.map(\.x), cols.map(\.y), cols.map(\.z)]
+    }
+
+    /// 거꾸로: AR 방향 -> J2000 적도좌표. "카메라가 보는 방향은 하늘 주소로 어디인가?"
+    ///
+    /// 회전 행렬의 역행렬은 전치 행렬(행과 열을 바꾼 것)이다. 돌린 걸 되돌리려면 반대로 돌리면 되기 때문.
+    /// 그래서 역행렬을 따로 계산할 필요 없이 m[행][열] 대신 m[열][행]을 쓰면 된다.
+    /// (대기굴절은 반영 안 됨)
+    public static func equatorial(fromAR v: Vector3, context: Context) -> Equatorial {
+        let m = equatorialToAR(context: context)
+        let a = [v.x, v.y, v.z]
+        let e = (0..<3).map { c in (0..<3).reduce(0) { $0 + m[$1][c] * a[$1] } }   // 전치 행렬 × 벡터
+        return equatorial(x: e[0], y: e[1], z: e[2])
     }
 
     // MARK: - 적도좌표 <-> 3D 벡터 (적도 기준: x = 춘분점, z = 천구 북극)

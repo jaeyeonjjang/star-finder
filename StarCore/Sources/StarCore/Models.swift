@@ -8,6 +8,8 @@ public struct StarCatalog: Codable, Sendable {
     public let constellations: [Constellation]
     /// 다른 문화권 별자리. 지금은 "korean" (천상열차분야지도 312개)
     public let skyCultures: [String: SkyCulture]?
+    /// 서양 별자리 공식 경계선 (Locate.swift)
+    public let boundaries: Boundaries?
 
     /// 한국 전통 별자리
     public var korean: SkyCulture? { skyCultures?["korean"] }
@@ -37,6 +39,27 @@ public struct SkyCulture: Codable, Sendable {
     public let name: String        // "한국 전통 (천상열차분야지도)"
     public let license: String     // "GPL-2.0"
     public let constellations: [Constellation]
+    /// 28수의 거성(距星, 각 수의 시작 기준 별) HIP 번호 28개. 한국 전통만 있음
+    public let mansionStars: [Int]?
+}
+
+/// 국제천문연맹(IAU) 별자리 경계선. 1875년 기준 좌표(B1875)에서 전부 가로선 아니면 세로선이다.
+/// (1930년에 IAU가 그렇게 정했다. 세차 때문에 지금 좌표로는 살짝 비뚤어져 있다)
+public struct Boundaries: Codable, Sendable {
+    public let epoch: String           // "B1875"
+    /// 가로 경계선: 적위 dec에서 적경 ra1부터 동쪽으로 ra2까지. 위아래가 별자리 a, b
+    public let parallels: [Parallel]
+    /// 세로 경계선: 적경 ra에서 적위 dec1부터 dec2까지. 판정에는 안 쓰고 그릴 때만 쓴다
+    public let meridians: [Meridian]
+
+    public struct Parallel: Codable, Sendable {
+        public let dec: Double, ra1: Double, ra2: Double
+        public let a: String, b: String
+    }
+    public struct Meridian: Codable, Sendable {
+        public let ra: Double, dec1: Double, dec2: Double
+        public let a: String, b: String
+    }
 }
 
 public struct Constellation: Codable, Sendable, Identifiable {
