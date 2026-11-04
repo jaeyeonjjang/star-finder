@@ -24,7 +24,7 @@ VS Code에서는 "WSL" 확장으로 폴더를 연 뒤 "Swift" 확장(swiftlang)�
 
 ```bash
 # 데이터 생성 (Python 3, 외부 패키지 불필요)
-cd tools && python3 build_catalog.py        # -> stars.json (별 ~5,000개, 88개 별자리)
+cd tools && python3 build_catalog.py        # -> stars.json (별 ~5,000개, 88개 별자리) + ../assets/constellations/*.png
 
 # 계산 로직 테스트
 cd ../StarCore && swift test
@@ -45,11 +45,15 @@ for star in catalog.stars {
 
 // 별자리 이름 라벨: 시작할 때 한 번 계산
 let centers = catalog.constellationCenters()   // ["Ori": Equatorial(ra:dec:), ...]
+
+// 별자리 그림: 시작할 때 한 번 계산, 꼭짓점은 프레임마다 horizontal -> arVector로 변환
+let meshes = catalog.artMeshes()               // ["Ori": ArtMesh(positions:uvs:indices:), ...]
 ```
 
 ## 데이터 라이선스
 - HYG Database v4.1 — CC BY-SA 4.0
-- Stellarium modern sky culture (별자리 선) — GPL-2.0
+- Stellarium modern sky culture (별자리 선) — CC BY-SA 4.0
+- Stellarium modern sky culture (별자리 그림, `assets/constellations/`) — Free Art License
 - d3-celestial (별자리 한국어 이름) — BSD-3-Clause
 
-앱 출시 시 앱 내 정보 화면에 출처 표기 필요. Stellarium 데이터는 GPL이라 상용 출시 전 라이선스 확인 권장.
+앱 출시 시 앱 내 정보 화면에 출처 표기 필요.

@@ -1,7 +1,8 @@
 # Star Finder — 별자리 찾기 AR 앱
 
 ## 목표
-아이폰 카메라를 하늘에 대면 별과 별자리(선, 한국어 이름)를 AR로 겹쳐 보여주는 iOS 앱.
+아이폰 카메라를 하늘에 대면 별과 별자리(선, 한국어 이름, 그림)를 AR로 겹쳐 보여주는 iOS 앱.
+사용자의 공부용 프로젝트 — 코드를 바꾸면 왜 그렇게 했는지 설명하고 `docs/StarCore-가이드.md`도 갱신.
 
 ## 결정 사항
 - **iOS 네이티브**: Swift + SwiftUI + ARKit + RealityKit (SceneKit은 사용하지 않음)
@@ -20,12 +21,15 @@
 ```
 star-finder/
 ├── docs/StarCore-가이드.md   # 공부용 구조 설명 (StarCore 바꾸면 같이 갱신)
-├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json
+├── assets/constellations/   # 별자리 그림 PNG 85개 (Stellarium, build_catalog.py가 받음)
+├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json + 그림
+├── tools/preview_art.py     # 그림이 별에 맞게 겹치는지 확인용 이미지 (numpy, pillow)
 └── StarCore/                # 순수 Swift 패키지 (Foundation만 사용, WSL/맥 공용)
     ├── Sources/StarCore/Models.swift     # StarCatalog, Star, Constellation, Horizontal, Vector3, Observer
     ├── Sources/StarCore/Astronomy.swift  # 율리우스일, GMST, 세차 보정, 적도->지평, 대기굴절, 지평->AR 벡터
     ├── Sources/StarCore/Appearance.swift # 등급->크기, 색지수->RGB
     ├── Sources/StarCore/Labels.swift     # 별자리 이름 라벨 위치(구면 중심)
+    ├── Sources/StarCore/Art.swift        # 별자리 그림: 기준점 3개 -> 3×3 행렬 -> 격자 메시
     └── Tests/StarCoreTests/              # astropy 기준값 + 실제 stars.json으로 검증 (허용 오차 0.05°)
 ```
 
@@ -33,7 +37,8 @@ star-finder/
 - StarCore에는 ARKit, CoreLocation, simd 등 애플 전용 프레임워크를 넣지 않는다 (WSL에서 빌드돼야 함).
 - 별 좌표는 J2000 기준(도 단위). 세차 보정은 `Astronomy.Context`에서 처리. 대기굴절은 `Astronomy.refracted(_:)`로 따로 적용 (`horizontal`은 기하학적 위치).
 - 크기 지수(0.12), 색 채도(0.6)는 튜닝 값. 실기기에서 보고 조정.
-- 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선(GPL-2.0), d3-celestial(BSD-3). 상용 출시 전 확인 필요.
+- 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선(CC BY-SA 4.0), Stellarium 그림(Free Art License), d3-celestial(BSD-3). 앱에 출처 표기 필요.
+- 그림 UV는 이미지 왼쪽 위 원점. RealityKit에서 뒤집혀 보이면 v를 1-v로, 안 보이면 삼각형 방향(컬링) 확인.
 
 ## 진행 상황
 - [x] build_catalog.py 작성 및 실행 확인 (별 약 5,000개, 별자리 88개)
@@ -41,6 +46,8 @@ star-finder/
 - [x] WSL에 Swift 6.4.2 설치, `swift test` 7개 통과 (2026-11-04)
 - [x] GitHub 저장소 생성 (github.com/jaeyeonjjang/star-finder)
 - [x] (WSL) 미리 만들어 둠: 대기굴절, 등급별 크기, 색지수->색, 별자리 라벨 위치 (테스트 21개)
+- [x] (WSL) 별자리 그림 85장(88개 별자리 모두 덮음 — Car=아르고호 전체, Oph에 뱀 포함): 데이터 + 메시 계산 + 미리보기로 위치 확인 (테스트 28개)
 - [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
+- [ ] (맥) 별자리 그림 표시 (MeshDescriptor + UnlitMaterial, 금색, 가산 합성)
 - [ ] 다듬기: 지평선 아래 처리, 행성/달, 탭하면 정보

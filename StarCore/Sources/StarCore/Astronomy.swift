@@ -91,6 +91,19 @@ public enum Astronomy {
         return Vector3(x: cos(alt) * sin(az), y: sin(alt), z: -cos(alt) * cos(az))
     }
 
+    // MARK: - 적도좌표 <-> 3D 벡터 (적도 기준: x = 춘분점, z = 천구 북극)
+
+    /// 적경/적위 -> 단위 벡터 [x, y, z]
+    static func unitVector(ra: Double, dec: Double) -> [Double] {
+        let a = rad(ra), d = rad(dec)
+        return [cos(d) * cos(a), cos(d) * sin(a), sin(d)]
+    }
+
+    /// 벡터 -> 적경/적위 (길이는 상관없음)
+    static func equatorial(x: Double, y: Double, z: Double) -> Equatorial {
+        Equatorial(ra: normalize(deg(atan2(y, x))), dec: deg(atan2(z, (x * x + y * y).squareRoot())))
+    }
+
     // MARK: - 유틸
 
     @inline(__always) static func rad(_ d: Double) -> Double { d * .pi / 180.0 }

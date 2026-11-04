@@ -32,6 +32,24 @@ public struct Constellation: Codable, Sendable, Identifiable {
     public let nameEn: String      // "Orion"
     /// 선분 목록. 각 배열은 HIP 번호를 순서대로 이은 폴리라인
     public let lines: [[Int]]
+    /// 별자리 그림. Pup, Vel, Ser은 nil — 용골자리(Car) 그림이 아르고호 전체,
+    /// 땅꾼자리(Oph) 그림에 뱀이 포함되어 있어서 따로 없다.
+    public let art: ConstellationArt?
+}
+
+/// 별자리 그림 정보. 이미지 파일은 assets/constellations/{file}
+public struct ConstellationArt: Codable, Sendable {
+    public let file: String       // "orion.png"
+    public let width: Int         // 픽셀
+    public let height: Int
+    /// 그림의 픽셀 위치 3개와, 그 위치에 와야 하는 별 3개
+    public let anchors: [Anchor]
+
+    public struct Anchor: Codable, Sendable {
+        public let x: Double      // 픽셀, 왼쪽 위가 (0, 0)
+        public let y: Double
+        public let hip: Int
+    }
 }
 
 /// 지평 좌표 (관측자 기준)

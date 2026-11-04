@@ -36,11 +36,10 @@ public extension StarCatalog {
     static func center(of points: [Equatorial]) -> Equatorial? {
         var x = 0.0, y = 0.0, z = 0.0
         for p in points {
-            let a = Astronomy.rad(p.ra), d = Astronomy.rad(p.dec)
-            x += cos(d) * cos(a); y += cos(d) * sin(a); z += sin(d)
+            let v = Astronomy.unitVector(ra: p.ra, dec: p.dec)
+            x += v[0]; y += v[1]; z += v[2]
         }
         guard x * x + y * y + z * z > 1e-12 else { return nil }  // 점이 없거나 정확히 상쇄됨
-        return Equatorial(ra: Astronomy.normalize(Astronomy.deg(atan2(y, x))),
-                          dec: Astronomy.deg(atan2(z, (x * x + y * y).squareRoot())))
+        return Astronomy.equatorial(x: x, y: y, z: z)
     }
 }

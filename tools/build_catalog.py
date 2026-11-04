@@ -1,15 +1,17 @@
 """
 별자리 앱용 데이터 생성 스크립트
 - 별: HYG Database v4.1 (CC BY-SA 4.0)
-- 별자리 선: Stellarium modern sky culture (GPL-2.0)
+- 별자리 선: Stellarium modern sky culture (CC BY-SA 4.0)
+- 별자리 그림: Stellarium modern sky culture illustrations (Free Art License)
 - 별자리 한국어 이름: d3-celestial (BSD-3-Clause)
 
-사용법: python3 build_catalog.py [--mag 6.0] [--out stars.json]
+사용법: python3 build_catalog.py [--mag 6.0] [--out stars.json] [--no-art]
 """
-import argparse, csv, io, json, urllib.request
+import argparse, csv, io, json, os, urllib.request
 
 HYG_URL = "https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv"
 LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern/index.json"
+ART_BASE = "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern/"
 NAMES_URL = "https://raw.githubusercontent.com/ofrohn/d3-celestial/master/data/constellations.json"
 
 
@@ -23,12 +25,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mag", type=float, default=6.0, help="이 등급보다 밝은 별만 포함 (기본 6.0, 맨눈 한계)")
     ap.add_argument("--out", default="stars.json")
+    ap.add_argument("--art-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "constellations"),
+                    help="별자리 그림 PNG 저장 폴더 (기본 ../assets/constellations)")
+    ap.add_argument("--no-art", action="store_true", help="그림 PNG 다운로드 생략 (stars.json의 기준점 정보는 포함)")
     args = ap.parse_args()
 
-    # 1) 별자리 선 (HIP 번호 목록)
+    # 1) 별자리 선 (HIP 번호 목록) + 그림 기준점
     sky = json.loads(fetch(LINES_URL))
     constellations = []
-    line_hips = set()
+    line_hips = set()   # 선이나 그림 기준점에 쓰여서 등급과 상관없이 꼭 넣어야 하는 별
     for c in sky["constellations"]:
         abbr = c["id"].split()[-1]                      # "CON modern Ori" -> "Ori"
         lines = [[int(h) for h in seg if isinstance(h, int) or str(h).isdigit()]
@@ -36,7 +41,19 @@ def main():
         lines = [seg for seg in lines if len(seg) >= 2]
         for seg in lines:
             line_hips.update(seg)
-        constellations.append({"id": abbr, "lines": lines})
+        entry = {"id": abbr, "lines": lines}
+        # 그림: 픽셀 좌표 3개 <-> 별 3개 대응. 이걸로 그림을 하늘에 겹친다 (StarCore/Art.swift)
+        img = c.get("image")
+        if img and len(img.get("anchors", [])) == 3:
+            entry["art"] = {
+                "file": os.path.basename(img["file"]),
+                "path": img["file"],    # 다운로드용, 출력 전에 지움
+                "width": img["size"][0],
+                "height": img["size"][1],
+                "anchors": [{"x": a["pos"][0], "y": a["pos"][1], "hip": int(a["hip"])} for a in img["anchors"]],
+            }
+            line_hips.update(a["hip"] for a in entry["art"]["anchors"])
+        constellations.append(entry)
 
     # 2) 한국어/영어 이름
     names = {f["id"]: f["properties"] for f in json.loads(fetch(NAMES_URL))["features"]}
@@ -71,6 +88,22 @@ def main():
         print(f"경고: 선 데이터에 있지만 카탈로그에 없는 별 {len(missing)}개 -> 해당 선 제거")
         for c in constellations:
             c["lines"] = [seg for seg in c["lines"] if all(h in found for h in seg)]
+            if "art" in c and not all(a["hip"] in found for a in c["art"]["anchors"]):
+                print(f"  {c['id']}: 그림 기준점 별이 없어서 그림 제외")
+                del c["art"]
+
+    # 4) 별자리 그림 PNG
+    arts = [c["art"] for c in constellations if "art" in c]
+    if not args.no_art:
+        os.makedirs(args.art_dir, exist_ok=True)
+        for art in arts:
+            dest = os.path.join(args.art_dir, art["file"])
+            if not os.path.exists(dest):
+                with urllib.request.urlopen(ART_BASE + art["path"]) as r, open(dest, "wb") as f:
+                    f.write(r.read())
+        print(f"그림 {len(arts)}개 -> {os.path.normpath(args.art_dir)}")
+    for art in arts:
+        del art["path"]
 
     stars.sort(key=lambda s: s["mag"])
     out = {"epoch": "J2000", "stars": stars, "constellations": constellations}

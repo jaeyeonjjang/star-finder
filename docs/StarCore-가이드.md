@@ -42,6 +42,7 @@ Vector3  x(동), y(위), z(-북)     → 앱에서 ×100m 해서 AR 공간에 �
 
 별마다 따로:  star.relativeSize, star.color       ← Appearance.swift
 별자리마다:   catalog.constellationCenters()      ← Labels.swift
+별자리 그림:  catalog.artMeshes()                 ← Art.swift
 ```
 
 핵심은 **좌표계를 세 번 바꾸는 것**이다.
@@ -119,11 +120,13 @@ StarCore/
 │   ├── Models.swift                  # 데이터 타입
 │   ├── Astronomy.swift               # 좌표 계산
 │   ├── Appearance.swift              # 크기, 색
-│   └── Labels.swift                  # 별자리 이름 위치
+│   ├── Labels.swift                  # 별자리 이름 위치
+│   └── Art.swift                     # 별자리 그림 -> 하늘 위 메시
 └── Tests/StarCoreTests/
     ├── AstronomyTests.swift          # astropy 기준값과 비교
     ├── AppearanceTests.swift         # 굴절, 크기, 색
-    └── CatalogTests.swift            # 실제 stars.json으로 검증
+    ├── CatalogTests.swift            # 실제 stars.json으로 검증
+    └── ArtTests.swift                # 그림 기준점, 행렬, 메시
 ```
 
 ### 3.1 Package.swift
@@ -263,6 +266,79 @@ let members = Set(c.lines.joined()).compactMap { byHip[$0] }
 - `Set(...)`: 중복 제거 (여러 선이 공유하는 별을 한 번만 세려고)
 - `.compactMap { byHip[$0] }`: 딕셔너리에서 찾고, 없는 것(nil)은 버리기. `$0`은 클로저의 첫 번째 인자 (JS `x => byHip[x]`)
 
+### 3.6 Art.swift — 별자리 그림을 하늘에 붙이기
+
+그림 파일(`assets/constellations/orion.png`)은 512×512 흑백 PNG다. 하늘 좌표는 전혀 없다.
+대신 `stars.json`에 **기준점 3개**가 있다.
+
+```json
+"art": {"file": "orion.png", "width": 512, "height": 512,
+        "anchors": [{"x": 59,  "y": 11,  "hip": 27913},
+                    {"x": 329, "y": 477, "hip": 27366},
+                    {"x": 421, "y": 91,  "hip": 22449}]}
+```
+
+"그림의 (59, 11) 픽셀에 HIP 27913 별이 와야 한다"는 뜻이다. 이 세 쌍만으로 그림 전체의 위치가 정해진다.
+
+**원리: 3×3 행렬 하나**
+
+픽셀 좌표 `(x, y)`에 1을 붙여 3차원 벡터 `(x, y, 1)`로 만든다. 그리고 다음을 만족하는 행렬 M을 찾는다.
+
+```
+M · (x₁, y₁, 1) = 별₁의 방향 벡터
+M · (x₂, y₂, 1) = 별₂의 방향 벡터
+M · (x₃, y₃, 1) = 별₃의 방향 벡터
+```
+
+세 식을 열(column)로 나란히 쌓으면 행렬 식 하나가 된다.
+
+```
+M · P = V        P = [픽셀 3개를 열로],  V = [별 방향 3개를 열로]
+M = V · P⁻¹
+```
+
+M을 구하면 그림의 아무 픽셀이나 `M · (x, y, 1)`을 계산하고 길이를 1로 맞추면(정규화) 하늘 위치가 나온다.
+
+왜 1을 붙이나? `(x, y)`만으로는 2차원이라 3×3 행렬을 곱할 수 없고, 무엇보다 **평행이동**을 표현할 수 없다.
+1을 붙이면 행렬의 세 번째 열이 "원점을 어디로 옮길지"를 담당하게 된다. (3D 그래픽스의 동차좌표와 같은 아이디어)
+
+기하학적으로는 "세 별을 지나는 평면에 그림을 붙이고, 천구 중심에서 보이는 방향으로 천구 표면에 투영"하는 것과 같다.
+
+**왜 격자(메시)로 나누나**
+
+천구는 공이라 휘어 있다. 그림을 평평한 사각형 하나로 붙이면 꼭짓점 4개만 천구 위에 있고 가운데는 안쪽으로 들어간다.
+그래서 그림을 8×8칸으로 잘라 각 격자점을 따로 계산한다(`mesh(segments:)`). 칸이 작으면 칸 하나는 거의 평평하다.
+
+```
+꼭짓점 (8+1)² = 81개, 각 꼭짓점: 하늘 위치(positions) + 그림 속 위치(uvs, 0~1)
+칸 하나 = 삼각형 2개 → indices 8×8×6 = 384개
+```
+
+3D 엔진은 이 `positions` + `uvs` + `indices`를 받아 "삼각형마다 그림의 해당 부분을 늘려 붙여서" 그린다. 이게 텍스처 매핑이다.
+
+**Matrix3를 직접 만든 이유**
+
+Apple의 `simd`에는 `simd_double3x3`과 `.inverse`가 있지만 리눅스에서 안 된다. 그래서 역행렬을 여인수 전개로 직접 구현했다.
+행렬식(determinant)이 0이면 역행렬이 없다 — 기준점 3개가 한 직선 위에 있는 경우다. 이때 `init?`이 nil을 돌려준다 (실패할 수 있는 생성자).
+
+**앱(맥)에서 할 일**
+
+1. 시작할 때 `catalog.artMeshes()` 한 번
+2. 프레임마다 꼭짓점 `positions`를 `horizontal → arVector`로 바꿔 RealityKit `MeshDescriptor`에 넣기
+3. 텍스처: PNG, `UnlitMaterial`, 금색으로 물들이고 가산 합성(검은 배경이 투명하게 보임)
+4. 그림이 뒤집혀 보이면 `v`를 `1 - v`로, 아예 안 보이면 삼각형 방향(안쪽에서 보므로 뒷면 컬링) 확인
+
+**미리보기로 확인하기**
+
+테스트는 "기준점 픽셀이 정확히 그 별로 가는가"를 확인하지만, 그건 행렬의 정의상 항상 성립한다.
+그림이 **뒤집히지 않았는지**는 눈으로 봐야 안다. 그래서 하늘 지도에 그림을 겹쳐 그리는 스크립트를 만들어 두었다.
+
+```bash
+python3 tools/preview_art.py . preview.png Ori,UMa,Sco,Cyg
+```
+
+여기서는 반대 방향(화면 픽셀 → 하늘 방향 → `M⁻¹`로 그림 픽셀)으로 계산한다. 출력 이미지의 각 픽셀이 그림의 어디에 해당하는지 찾는 방식이라 빈틈이 생기지 않는다.
+
 ---
 
 ## 4. 이 코드에 나오는 Swift 문법
@@ -310,6 +386,7 @@ swift test --filter CatalogTests/testCatalogSize   # 테스트 하나
 | `AstronomyTests` | 서울, 2026-11-04 22시(KST)의 시리우스·베가·북극성·베텔게우스 위치, GMST, AR 축 방향, JSON 디코딩 | astropy (파이썬 천문 라이브러리) |
 | `AppearanceTests` | 굴절량(지평선 34′, 45°에서 1′), 연속성, 크기 범위, 태양 온도, 별 색 경향 | 항해력 표준값, 물리 상식 |
 | `CatalogTests` | 실제 `stars.json`: 별 개수, 별자리 88개, 선의 모든 별이 존재, 별자리 중심 | 같은 계산을 Python으로 한 값 |
+| `ArtTests` | 역행렬, 85개 그림의 기준점이 정확히 그 별로 가는지, 그림이 한쪽으로 늘어나지 않는지, 메시 모양 | 수학적 성질 |
 
 읽어 볼 포인트:
 
@@ -318,6 +395,9 @@ swift test --filter CatalogTests/testCatalogSize   # 테스트 하나
 - `@testable import StarCore` — 테스트에서는 `internal` 함수(`StarCatalog.center(of:)` 등)도 쓸 수 있게 해 준다.
 - `CatalogTests`는 `#filePath`(이 테스트 파일의 경로)에서 폴더를 네 번 올라가 `tools/stars.json`을 찾는다.
 - `static let catalog = { ... }()` — 처음 쓸 때 한 번만 로드하고 모든 테스트가 공유한다 (lazy 초기화).
+- `ArtTests.angle(_:_:)` — 두 방향 사이 각도를 `acos(내적)`이 아니라 `atan2(|외적|, 내적)`으로 잰다.
+  처음엔 `acos`로 했다가 "오차 1.2e-6°" 실패가 났다. 계산이 틀린 게 아니라, 각도가 0에 가까우면 `cos`가 1에 너무 가까워서
+  `Double`로 구분이 안 되기 때문이다 (`acos`의 정밀도 한계 약 1e-6°). 실수 계산에서 자주 만나는 함정.
 
 ---
 
@@ -330,7 +410,8 @@ swift test --filter CatalogTests/testCatalogSize   # 테스트 하나
 3. **테스트 추가**: 북극성의 고도는 관측 위도와 거의 같다(서울 약 37.5°). 위도를 바꿔 가며 이걸 확인하는 테스트를 써 본다.
 4. **함수 추가**: 지금 떠 있는 별 중 가장 밝은 별 N개를 돌려주는 함수 `visibleStars(catalog:context:limit:)`를 만들어 본다. (`filter`, `sorted`, `prefix`)
 5. **세차 끄고 비교**: `Context`의 `zeta`, `z`, `theta`를 0으로 두면 결과가 얼마나 어긋나는지 테스트 오차 메시지로 확인한다. (약 0.36°)
-6. **도전: 달 위치**: Meeus 『Astronomical Algorithms』 47장 공식을 `Moon.swift`로 구현하고 astropy 값과 비교한다.
+6. **그림 미리보기**: `tools/preview_art.py`로 좋아하는 별자리를 그려 보고, `Art.swift`의 `mesh(segments:)`에서 `segments`를 1로 하면 큰 별자리(바다뱀자리 Hya)에서 무엇이 달라질지 생각해 본다.
+7. **도전: 달 위치**: Meeus 『Astronomical Algorithms』 47장 공식을 `Moon.swift`로 구현하고 astropy 값과 비교한다.
 
 ### 참고 자료
 
