@@ -19,6 +19,7 @@
 ## 구조
 ```
 star-finder/
+├── docs/StarCore-가이드.md   # 공부용 구조 설명 (StarCore 바꾸면 같이 갱신)
 ├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json
 └── StarCore/                # 순수 Swift 패키지 (Foundation만 사용, WSL/맥 공용)
     ├── Sources/StarCore/Models.swift     # StarCatalog, Star, Constellation, Horizontal, Vector3, Observer
