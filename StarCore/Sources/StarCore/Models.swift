@@ -4,7 +4,13 @@ import Foundation
 public struct StarCatalog: Codable, Sendable {
     public let epoch: String
     public let stars: [Star]
+    /// 서양 별자리 (국제천문연맹 88개)
     public let constellations: [Constellation]
+    /// 다른 문화권 별자리. 지금은 "korean" (천상열차분야지도 312개)
+    public let skyCultures: [String: SkyCulture]?
+
+    /// 한국 전통 별자리
+    public var korean: SkyCulture? { skyCultures?["korean"] }
 
     public static func load(from data: Data) throws -> StarCatalog {
         try JSONDecoder().decode(StarCatalog.self, from: data)
@@ -26,10 +32,19 @@ public struct Star: Codable, Sendable, Identifiable {
     public var id: Int { hip }
 }
 
+/// 별자리 체계 하나 (예: 한국 전통)
+public struct SkyCulture: Codable, Sendable {
+    public let name: String        // "한국 전통 (천상열차분야지도)"
+    public let license: String     // "GPL-2.0"
+    public let constellations: [Constellation]
+}
+
 public struct Constellation: Codable, Sendable, Identifiable {
-    public let id: String          // "Ori"
-    public let nameKo: String      // "오리온자리"
-    public let nameEn: String      // "Orion"
+    public let id: String          // "Ori" (서양), "P01" / "01A" (한국 전통, KoreanSky.swift 참고)
+    public let nameKo: String      // "오리온자리", "북극"
+    public let nameEn: String      // "Orion", "Northern Pole"
+    /// 한자 이름 (한국 전통 별자리만). "北極"
+    public let nameHanja: String?
     /// 선분 목록. 각 배열은 HIP 번호를 순서대로 이은 폴리라인
     public let lines: [[Int]]
     /// 별자리 그림. Pup, Vel, Ser은 nil — 용골자리(Car) 그림이 아르고호 전체,

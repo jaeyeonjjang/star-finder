@@ -19,9 +19,14 @@ public extension StarCatalog {
     /// 별자리 이름 라벨 위치 (별자리 id -> 중심 좌표).
     /// 앱 시작 시 한 번 계산해 두고, 프레임마다 `Astronomy.horizontal(ra:dec:context:)`로 변환하세요.
     func constellationCenters() -> [String: Equatorial] {
+        constellationCenters(of: constellations)
+    }
+
+    /// 아무 별자리 목록이나 (예: `catalog.korean!.constellations`)
+    func constellationCenters(of list: [Constellation]) -> [String: Equatorial] {
         let byHip = starsByHip()
         var result: [String: Equatorial] = [:]
-        for c in constellations {
+        for c in list {
             let members = Set(c.lines.joined()).compactMap { byHip[$0] }
             if let center = Self.center(of: members.map { Equatorial(ra: $0.ra, dec: $0.dec) }) {
                 result[c.id] = center

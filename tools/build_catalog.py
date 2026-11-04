@@ -4,6 +4,7 @@
 - 별자리 선: Stellarium modern sky culture (CC BY-SA 4.0)
 - 별자리 그림: Stellarium modern sky culture illustrations (Free Art License)
 - 별자리 한국어 이름: d3-celestial (BSD-3-Clause)
+- 한국 전통 별자리 (천상열차분야지도): Stellarium korean sky culture (GPL-2.0)
 
 사용법: python3 build_catalog.py [--mag 6.0] [--out stars.json] [--no-art]
 """
@@ -13,12 +14,50 @@ HYG_URL = "https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CU
 LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern/index.json"
 ART_BASE = "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern/"
 NAMES_URL = "https://raw.githubusercontent.com/ofrohn/d3-celestial/master/data/constellations.json"
+KOREAN_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/korean/index.json"
 
 
 def fetch(url: str) -> str:
     print(f"다운로드: {url}")
     with urllib.request.urlopen(url) as r:
         return r.read().decode("utf-8")
+
+
+def parse_lines(raw):
+    """Stellarium 선 목록 -> HIP 번호만 남긴 꺾은선 목록.
+    "DSO:M44" 같은 별 아닌 천체는 빼고, 점이 2개 미만인 선은 버린다.
+    (별 하나짜리 별자리는 [h, h]처럼 같은 번호를 두 번 써서 표시돼 있어서 그대로 남는다)"""
+    lines = [[int(h) for h in seg if isinstance(h, int) or str(h).isdigit()] for seg in raw]
+    return [seg for seg in lines if len(seg) >= 2]
+
+
+def split_at_missing(lines, found):
+    """카탈로그에 없는 별이 있으면 그 자리에서 선을 끊는다.
+    [a, b, X, c, d] -> [a, b], [c, d]  (선 전체를 버리면 별자리가 통째로 사라질 수 있어서)"""
+    out = []
+    for seg in lines:
+        part = []
+        for h in seg + [None]:              # None = 끝 표시
+            if h is not None and h in found:
+                part.append(h)
+            else:
+                if len(part) >= 2:
+                    out.append(part)
+                part = []
+    return out
+
+
+def split_korean_name(native):
+    """'북극(北極)' -> ('북극', '北極'). '삼대(상대)(三台(上台))'처럼 괄호가 겹친 것도 처리:
+    맨 끝 ')'와 짝이 맞는 '('를 뒤에서부터 찾는다."""
+    if not native.endswith(")"):
+        return native, None
+    depth = 0
+    for i in range(len(native) - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(native[i], 0)
+        if depth == 0:
+            return native[:i], native[i + 1:-1]
+    return native, None
 
 
 def main():
@@ -36,9 +75,7 @@ def main():
     line_hips = set()   # 선이나 그림 기준점에 쓰여서 등급과 상관없이 꼭 넣어야 하는 별
     for c in sky["constellations"]:
         abbr = c["id"].split()[-1]                      # "CON modern Ori" -> "Ori"
-        lines = [[int(h) for h in seg if isinstance(h, int) or str(h).isdigit()]
-                 for seg in c.get("lines", [])]
-        lines = [seg for seg in lines if len(seg) >= 2]
+        lines = parse_lines(c.get("lines", []))
         for seg in lines:
             line_hips.update(seg)
         entry = {"id": abbr, "lines": lines}
@@ -61,6 +98,27 @@ def main():
         p = names.get(c["id"], {})
         c["nameKo"] = p.get("ko") or p.get("name") or c["id"]
         c["nameEn"] = p.get("en") or p.get("name") or c["id"]
+
+    # 2-1) 한국 전통 별자리 (천상열차분야지도, 312개)
+    #   id: P01 = 자미원, S01 = 태미원, H01 = 천시원, 01A~28x = 28수 (StarCore/KoreanSky.swift 참고)
+    #   원본에 id가 겹치는 게 있어서(H19: 여상, 종대부) 두 번째부터 b, c...를 붙인다.
+    #   종대부(宗大夫)는 천상열차분야지도가 중국 목록에 더한, 한국 지도에만 있는 별자리
+    korean, seen = [], set()
+    for c in json.loads(fetch(KOREAN_URL))["constellations"]:
+        ko, hanja = split_korean_name(c["common_name"]["native"])
+        lines = parse_lines(c.get("lines", []))
+        for seg in lines:
+            line_hips.update(seg)
+        cid = c["id"].split()[-1]
+        for suffix in "bcdefg":
+            if cid not in seen:
+                break
+            cid = c["id"].split()[-1] + suffix
+        seen.add(cid)
+        entry = {"id": cid, "nameKo": ko, "nameEn": c["common_name"]["english"], "lines": lines}
+        if hanja:
+            entry["nameHanja"] = hanja
+        korean.append(entry)
 
     # 3) 별: 밝은 별 + 별자리 선에 쓰이는 별은 등급 상관없이 포함
     stars = []
@@ -85,9 +143,9 @@ def main():
     found = {s["hip"] for s in stars}
     missing = line_hips - found
     if missing:
-        print(f"경고: 선 데이터에 있지만 카탈로그에 없는 별 {len(missing)}개 -> 해당 선 제거")
-        for c in constellations:
-            c["lines"] = [seg for seg in c["lines"] if all(h in found for h in seg)]
+        print(f"경고: 선 데이터에 있지만 카탈로그에 없는 별 {len(missing)}개 {sorted(missing)} -> 그 별에서 선을 끊음")
+        for c in constellations + korean:
+            c["lines"] = split_at_missing(c["lines"], found)
             if "art" in c and not all(a["hip"] in found for a in c["art"]["anchors"]):
                 print(f"  {c['id']}: 그림 기준점 별이 없어서 그림 제외")
                 del c["art"]
@@ -106,10 +164,12 @@ def main():
         del art["path"]
 
     stars.sort(key=lambda s: s["mag"])
-    out = {"epoch": "J2000", "stars": stars, "constellations": constellations}
+    out = {"epoch": "J2000", "stars": stars, "constellations": constellations,
+           "skyCultures": {"korean": {"name": "한국 전통 (천상열차분야지도)", "license": "GPL-2.0",
+                                      "constellations": korean}}}
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"완료: 별 {len(stars)}개, 별자리 {len(constellations)}개 -> {args.out}")
+    print(f"완료: 별 {len(stars)}개, 별자리 {len(constellations)}개 + 한국 전통 {len(korean)}개 -> {args.out}")
 
 
 if __name__ == "__main__":
