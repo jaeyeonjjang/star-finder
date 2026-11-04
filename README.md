@@ -1,3 +1,5 @@
+<h1 align="center">나랑 별 보러 가지 않을래~</h1>
+
 # Star Finder — 1단계: 데이터 + StarCore
 
 ```
