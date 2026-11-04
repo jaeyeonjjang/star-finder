@@ -35,7 +35,7 @@ star-finder/
 - [x] build_catalog.py 작성 및 실행 확인 (별 약 5,000개, 별자리 88개)
 - [x] StarCore 코드 작성 (공식은 astropy 대비 오차 0.01° 이내로 검증)
 - [x] WSL에 Swift 6.4.2 설치, `swift test` 7개 통과 (2026-11-04)
-- [ ] GitHub 저장소 생성 ← **현재 단계**
-- [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트
+- [x] GitHub 저장소 생성 (github.com/jaeyeonjjang/star-finder)
+- [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
 - [ ] 다듬기: 등급별 별 크기, 색지수로 별 색, 지평선 아래 처리, 행성/달, 탭하면 정보
