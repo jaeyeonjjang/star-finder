@@ -79,6 +79,7 @@ AR 화면에 배치 (화살표 × 100m)
   Astronomy.equatorialToAR             ← Astronomy.swift  (하늘 전체를 한 번에 돌리는 지름길)
   boundaries.constellation(at:)        ← Locate.swift     (지금 보는 곳이 어느 별자리인가)
   KoreanGroup, korean.mansion(at:)     ← KoreanSky.swift, Locate.swift (천상열차분야지도: 3원 28수)
+  constellation.story                  ← Models.swift (별자리 이야기, 원본은 tools/stories.json)
 ```
 
 거꾸로 가는 길도 있다. **"폰 카메라가 보는 방향 → 하늘 주소 → 어느 별자리"** (4.8절)
@@ -616,7 +617,8 @@ StarCore/
     ├── CatalogTests.swift        # 실제 stars.json으로 검증
     ├── ArtTests.swift            # 그림 기준점, 행렬, 메시
     ├── KoreanSkyTests.swift      # 한국 전통 별자리 데이터, 3원 28수
-    └── LocateTests.swift         # 경계선 판정, 28수 판정, 가장 가까운 별자리
+    ├── LocateTests.swift         # 경계선 판정, 28수 판정, 가장 가까운 별자리
+    └── StoryTests.swift          # 별자리 이야기
 ```
 
 ### 4.1 Package.swift — 패키지 설정
@@ -645,7 +647,7 @@ targets: [
 | `SkyCulture` | 다른 문화권 별자리 묶음 | `name`, `license`, `constellations`, `mansionStars`(28수 거성) |
 | `Boundaries` | 서양 별자리 공식 경계선 | `parallels`(가로선), `meridians`(세로선) |
 | `Star` | 별 하나 | `hip`(번호), `ra`, `dec`, `mag`, `name?`, `ci?` |
-| `Constellation` | 별자리 하나 | `id`("Ori", "P01"), `nameKo`, `nameHanja?`, `lines`, `art?` |
+| `Constellation` | 별자리 하나 | `id`("Ori", "P01"), `nameKo`, `nameHanja?`, `lines`, `art?`, `story?` |
 | `ConstellationArt` | 별자리 그림 정보 | `file`, `width`, `height`, `anchors` |
 | `Horizontal` | 지평좌표 | `altitude`, `azimuth`, `isAboveHorizon` |
 | `Vector3` | AR 화살표 | `x`, `y`, `z` |
@@ -1076,7 +1078,35 @@ let inside = crossings.filter { $0.value % 2 == 1 }    // 홀수만
 
 id 중복은 테스트(라벨 위치가 308개여야 하는데 307개)로 발견했다. 딕셔너리에 같은 키로 두 번 넣으면 앞의 것이 조용히 덮어써진다.
 
-### 4.10 브라우저 시뮬레이터 (`simulator/`)
+### 4.10 별자리 이야기 (`tools/stories.json`)
+
+서양 88개 전부, 한국 전통 50개(28수 대표 + 북극, 북두, 직녀, 견우성, 노인성 같은 유명한 것)에 이야기가 있다.
+
+```
+tools/stories.json  (사람이 직접 쓴 글. 별자리 id → 이야기)
+      │  build_catalog.py가 합침
+      ▼
+tools/stars.json    각 별자리의 "story" 필드
+      │
+      ▼
+Constellation.story  (String? — 없을 수도 있음)
+```
+
+왜 `stars.json`에 바로 쓰지 않고 파일을 따로 두나? `stars.json`은 `build_catalog.py`가 인터넷에서 데이터를 받아 **새로 만드는 결과물**이다.
+거기에 손으로 글을 써 넣으면 다음에 다시 만들 때 다 지워진다. 그래서 "사람이 쓰는 원본"과 "프로그램이 만드는 결과"를 나눴다.
+(React 프로젝트에서 `src/`는 고치고 `build/`는 안 고치는 것과 같다)
+
+`build_catalog.py`는 합칠 때 `stories.json`에 **없는 별자리 id가 있으면 멈춘다** (`assert`). `"Orl"`처럼 오타를 내면 이야기가 조용히 사라지는 대신 바로 알 수 있다.
+
+**서양 이야기**는 그리스 신화가 대부분이지만, 1590년대 네덜란드 항해사들과 1750년대 라카유가 만든 남쪽 하늘 별자리들은 신화가 없다.
+그런 별자리는 "누가, 왜 만들었나"(공기 펌프, 현미경 같은 당시 최신 발명품)를 이야기로 썼다.
+
+**한국 이야기**는 서양처럼 신화가 있다기보다 **이름의 뜻**이 이야기다. 별자리가 하늘의 나라(임금, 신하, 시장, 창고)라서
+"이 별은 누구이고 무슨 일을 맡았나"가 핵심이다. 여기에 옛 책(『서경』, 『시경』, 『사기』)에 남은 기록과 우리 풍속(좀생이 보기, 칠석, 칠성신, 서귀포 노인성)을 더했다.
+
+`StoryTests`가 확인하는 것: 서양 88개 전부와 28수 대표 28개에 이야기가 있는지, 길이가 40~600자인지(너무 짧으면 빠뜨린 것, 너무 길면 화면에 안 들어감).
+
+### 4.11 브라우저 시뮬레이터 (`simulator/`)
 
 Mac 없이 화면을 보려고 만든 도구. StarCore 바깥의 별도 Swift 프로그램이 StarCore를 가져다 쓴다.
 
@@ -1099,6 +1129,7 @@ simulator/run.sh
 - **탭 (서양 별자리 / 천상열차분야지도)**: 선, 이름, 그림을 바꿔 보여준다. 한국 별자리는 오방색, 이름은 한글+한자.
   312개라 넓게 볼 때는 28수 대표 이름만 보이고, 확대하면(시야 45° 미만) 전부 보인다. 고른 탭은 브라우저에 기억된다.
 - **지금 보는 곳 (화면 위)**: 가운데 동그라미가 보는 곳의 별자리. 그 별자리 선을 밝게, 서양 탭에서는 그림도 밝게.
+- **이야기 카드**: 위쪽 "지금 보는 곳"을 누르거나 `i` 키. 카드를 열어 둔 채 둘러보면 보는 별자리를 따라 내용이 바뀐다 (AR에서 폰을 돌리는 것처럼). `Esc`로 닫기.
 
 **판정 표 (lookup table)**: 브라우저가 매 프레임 경계선 판정을 하려면 StarCore 로직을 JavaScript로 다시 짜야 한다.
 대신 StarSim이 하늘을 **1° × 1° 칸 64,800개**로 나눠서 칸마다 StarCore로 미리 판정해 두고(서양 별자리, 한국 가까운 별자리, 28수),
@@ -1168,6 +1199,7 @@ swift test --filter CatalogTests/testCatalogSize  # 테스트 하나
 | `CatalogTests` | 실제 stars.json: 별 개수, 별자리 88개, 선의 별이 다 있는지, 별자리 가운데 | 같은 계산을 Python으로 한 값 |
 | `ArtTests` | 역행렬, 85개 그림의 기준점이 정확히 그 별로 가는지, 그림이 한쪽으로 늘어나지 않는지 | 수학적 성질 |
 | `KoreanSkyTests` | 312개 로드, id 중복 없음, 한글/한자 이름 분리, 3원 28수 개수, 28수 한자 표 = 데이터 | Stellarium 데이터 |
+| `StoryTests` | 서양 88개 전부, 28수 대표 28개에 이야기가 있는지, 한국 50개, 길이 40~600자 | stories.json |
 | `LocateTests` | 유명한 별의 별자리(베텔게우스→오리온 등), 천구 남북극, 하늘 전체 2° 간격으로 빠짐없이 한 별자리씩, 28수(안타레스→심수 등), 직녀=베가 | 상식, 천문 자료 |
 
 읽어 볼 만한 포인트:
@@ -1204,7 +1236,8 @@ swift test --filter CatalogTests/testCatalogSize  # 테스트 하나
 9. **천상열차분야지도 탭**: 시뮬레이터에서 탭을 바꿔 보고, 직녀(베가)와 하고(견우성, 알타이르)를 찾아 본다. 사이에 은하수가 있다.
 10. **사신 찾기**: 오늘 밤 남쪽 하늘에 뜬 28수는 어느 방향(청룡/현무/백호/주작) 소속인가? 계절마다 바뀐다.
 11. **울타리 세기 손으로 해보기**: 종이에 아무 다각형이나 그리고 안쪽 점에서 위로 선을 그어 변을 몇 번 넘는지 세어 본다.
-12. **도전 — 달 위치**: Meeus의 『Astronomical Algorithms』 47장 공식을 `Moon.swift`로 구현하고 astropy 값과 비교한다.
+12. **이야기 써 보기**: `tools/stories.json`의 `korean`에 아직 없는 별자리(예: `"16D"` 천창, 하늘의 창고) 이야기를 써 넣고 `build_catalog.py`를 다시 돌린다. `StoryTests`의 개수(50)도 바꿔야 테스트가 통과한다 — 왜 그런지 생각해 보기.
+13. **도전 — 달 위치**: Meeus의 『Astronomical Algorithms』 47장 공식을 `Moon.swift`로 구현하고 astropy 값과 비교한다.
 
 ---
 
@@ -1249,7 +1282,7 @@ swift test --filter CatalogTests/testCatalogSize  # 테스트 하나
 | 자삼 역전 | 자수와 삼수 거성의 순서가 뒤집혀 자수 폭이 음수가 된 현상 | 2.11 |
 | 전치 행렬 | 행과 열을 맞바꾼 행렬. 회전 행렬이면 = 역행렬 | 4.3 |
 | 연관 값 enum | 경우마다 따라오는 값이 다른 Swift enum | 4.7 |
-| 판정 표 (lookup table) | 미리 계산해 둔 답을 칸에서 꺼내 쓰는 방법 | 4.10 |
+| 판정 표 (lookup table) | 미리 계산해 둔 답을 칸에서 꺼내 쓰는 방법 | 4.11 |
 | UV / 텍스처 매핑 | 그림의 어느 부분을 삼각형 어디에 붙일지 | 4.6 |
 
 ### 참고 자료

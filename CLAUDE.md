@@ -24,6 +24,7 @@ star-finder/
 ├── assets/constellations/   # 별자리 그림 PNG 85개 (Stellarium 원본, 명암 있는 흑백)
 ├── assets/constellations-outline/  # 윤곽선 스타일 변환본 (make_outline.py) ← 앱에서 이걸 씀
 ├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json + 그림
+├── tools/stories.json       # 별자리 이야기 (직접 쓴 글, 서양 88 + 한국 50) -> build_catalog.py가 stars.json에 합침
 ├── tools/make_outline.py    # 원본 그림 -> 윤곽선 + 번짐 (numpy, pillow)
 ├── tools/preview_art.py     # 그림이 별에 맞게 겹치는지 확인용 이미지 (numpy, pillow)
 ├── simulator/               # 브라우저 시뮬레이터 (WSL에서 화면 확인용)
@@ -65,6 +66,7 @@ star-finder/
 - [x] (WSL) 브라우저 시뮬레이터 (`simulator/run.sh`), 하늘 회전 행렬 (테스트 29개)
 - [x] (WSL) 한국 전통 별자리 312개 + 서양/한국 탭 (시뮬레이터)
 - [x] (WSL) 지금 보는 곳 판정: 서양 IAU 경계선, 한국 28수 + 가까운 별자리 (테스트 47개)
+- [x] (WSL) 별자리 이야기: 서양 88개 + 한국 전통 50개, 시뮬레이터 이야기 카드 (테스트 50개)
 - [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
 - [ ] (맥) 별자리 그림 표시 (MeshDescriptor + UnlitMaterial, 금색, 가산 합성)

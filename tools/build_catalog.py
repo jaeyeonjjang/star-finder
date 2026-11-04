@@ -200,6 +200,16 @@ def main():
     for art in arts:
         del art["path"]
 
+    # 5) 별자리 이야기 (tools/stories.json, 직접 쓴 글) -> story 필드
+    stories = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "stories.json"), encoding="utf-8"))
+    for key, group in (("western", constellations), ("korean", korean)):
+        by_id = {c["id"]: c for c in group}
+        unknown = set(stories[key]) - set(by_id)
+        assert not unknown, f"stories.json에 없는 별자리 id: {sorted(unknown)}"   # 오타 방지
+        for cid, text in stories[key].items():
+            by_id[cid]["story"] = text
+    print(f"이야기: 서양 {len(stories['western'])}개, 한국 전통 {len(stories['korean'])}개")
+
     stars.sort(key=lambda s: s["mag"])
     out = {"epoch": "J2000", "stars": stars, "constellations": constellations, "boundaries": boundaries,
            "skyCultures": {"korean": {"name": "한국 전통 (천상열차분야지도)", "license": "GPL-2.0",

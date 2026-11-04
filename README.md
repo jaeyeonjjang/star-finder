@@ -66,4 +66,6 @@ let meshes = catalog.artMeshes()               // ["Ori": ArtMesh(positions:uvs:
 - Stellarium korean sky culture (천상열차분야지도 별자리) — GPL-2.0
 - 별자리 경계선 (IAU, Stellarium modern sky culture 경유) — CC BY-SA 4.0
 
+별자리 이야기(`tools/stories.json`)는 이 프로젝트를 위해 직접 쓴 글이다 (그리스 신화, 동양 천문 고전, 한국 민속 참고).
+
 앱 출시 시 앱 내 정보 화면에 출처 표기 필요.

@@ -38,7 +38,17 @@
   #hud { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 8px;
          background: var(--panel); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
   #here { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 10px;
-          background: var(--panel); text-align: center; min-width: 180px; pointer-events: none; }
+          background: var(--panel); text-align: center; min-width: 180px; cursor: pointer; user-select: none; }
+  #here:hover { outline: 1px solid var(--line); }
+  #here .hint { font-size: 11px; color: var(--gold); opacity: 0.8; margin-top: 2px; }
+  #story { position: fixed; top: 12px; right: 12px; width: 330px; max-height: calc(100% - 80px); overflow: auto; box-sizing: border-box;
+           padding: 14px 16px; border-radius: 10px; background: var(--panel); backdrop-filter: blur(6px); display: none; }
+  #story.open { display: block; }
+  #story h2 { margin: 0 24px 2px 0; font-size: 19px; }
+  #story .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  #story p { margin: 0; font-size: 14px; line-height: 1.7; word-break: keep-all; }
+  #story .none { color: var(--muted); }
+  #story .close { position: absolute; top: 8px; right: 10px; background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; }
   #here .k { font-size: 11px; color: var(--muted); }
   #here .v { font-size: 20px; font-weight: bold; color: var(--gold); }
   #here .s { font-size: 12px; color: var(--muted); }
@@ -47,7 +57,8 @@
   #cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; background: rgba(255,255,255,0.7); border-radius: 50%; }
   #hide { position: absolute; top: 8px; right: 10px; padding: 0 6px !important; }
   #err { position: fixed; inset: 0; display: none; place-items: center; padding: 16px; text-align: center; }
-  @media (max-width: 700px) { #panel { width: auto; right: 12px; top: auto; bottom: 56px; max-height: 45%; } #here { top: 8px; } }
+  @media (max-width: 700px) { #panel { width: auto; right: 12px; top: auto; bottom: 56px; max-height: 45%; } #here { top: 8px; }
+                              #story { left: 12px; right: 12px; width: auto; top: 96px; max-height: 45%; } }
 </style>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 </head>
@@ -55,7 +66,8 @@
 <canvas id="c"></canvas>
 <div id="labels"></div>
 <div id="cross"></div>
-<div id="here"><div class="k">지금 보는 곳</div><div class="v">-</div><div class="s"></div></div>
+<div id="here" title="누르면 이야기 보기 (i)"><div class="k">지금 보는 곳</div><div class="v">-</div><div class="s"></div><div class="hint"></div></div>
+<div id="story"><button class="close" title="닫기 (Esc)">×</button><h2></h2><div class="sub"></div><p></p></div>
 <div id="panel">
   <button id="hide" title="패널 접기">–</button>
   <h1>Star Finder 시뮬레이터</h1>
@@ -82,7 +94,7 @@
     <div class="row">그림 밝기 <input id="artOpacity" type="range" min="0" max="1" step="0.01" value="0.35"></div>
     <div class="row">별 크기 <input id="starScale" type="range" min="0.3" max="3" step="0.01" value="1"></div>
     <div class="row">그림 색 <input id="artColor" type="color" value="#ffc061"></div>
-    <div style="color:var(--muted);margin-top:8px">드래그: 둘러보기 · 휠: 확대/축소<br>방향키: 둘러보기 · 스페이스: 재생<br>가운데 동그라미 = 폰 카메라 가운데</div>
+    <div style="color:var(--muted);margin-top:8px">드래그: 둘러보기 · 휠: 확대/축소<br>방향키: 둘러보기 · 스페이스: 재생<br>가운데 동그라미 = 폰 카메라 가운데<br>위쪽 이름 누르기 또는 i: 별자리 이야기</div>
   </div>
 </div>
 <div id="hud">-</div>
@@ -324,6 +336,8 @@ addEventListener('keydown', e => {
   else if (e.key === 'ArrowUp') viewAlt += s;
   else if (e.key === 'ArrowDown') viewAlt -= s;
   else if (e.key === ' ') { togglePlay(); e.preventDefault(); return; }
+  else if (e.key === 'i' || e.key === 'I') { toggleStory(); return; }
+  else if (e.key === 'Escape') { toggleStory(false); return; }
   else return;
   updateCamera();
 });
@@ -389,7 +403,42 @@ function updateHere() {
     v.style.color = c ? css(DIRS[c.dir].color) : 'var(--muted)';
     s.textContent = m ? `${d.name} ${d.guardian} · ${m.name}` : '';
   }
+  const con = currentCon();
+  document.querySelector('#here .hint').textContent = con?.story ? (storyOpen ? '이야기 닫기 ▴' : '이야기 보기 ▾') : '';
+  if (storyOpen) fillStory();
 }
+
+// ───────── 별자리 이야기 ─────────
+// 지금 보는 별자리의 이야기(StarCore Constellation.story)를 카드로. 열어 둔 채 둘러보면 따라 바뀐다
+let storyOpen = false;
+function currentCon() {
+  if (!current) return null;
+  return mode === 'western' ? sky.western.cons[current.west] : (current.kor >= 0 ? sky.korean.cons[current.kor] : null);
+}
+function fillStory() {
+  const c = currentCon(), card = $('story');
+  card.querySelector('h2').textContent = c ? (mode === 'western' ? c.ko : `${c.ko} ${c.hanja || ''}`) : '-';
+  card.querySelector('h2').style.color = c && mode === 'korean' ? css(DIRS[c.dir].color) : 'var(--gold)';
+  let sub = '';
+  if (c && mode === 'western') sub = c.en;
+  else if (c) {
+    const m = sky.mansions[current.mansion - 1];
+    sub = `${c.en}${m ? ' · 지금 보는 곳: ' + m.name : ''}`;
+  }
+  card.querySelector('.sub').textContent = sub;
+  const p = card.querySelector('p');
+  p.textContent = c?.story || (c ? '아직 이 별자리 이야기는 없어요. 28수 대표 별자리와 유명한 별자리부터 넣어 두었어요.' : '가운데 동그라미를 별자리에 맞춰 보세요.');
+  p.className = c?.story ? '' : 'none';
+}
+function toggleStory(open = !storyOpen) {
+  storyOpen = open;
+  $('story').classList.toggle('open', storyOpen);
+  if (storyOpen) fillStory();
+  const con = currentCon();
+  document.querySelector('#here .hint').textContent = con?.story ? (storyOpen ? '이야기 닫기 ▴' : '이야기 보기 ▾') : '';
+}
+$('here').onclick = () => toggleStory();
+document.querySelector('#story .close').onclick = () => toggleStory(false);
 
 // ───────── 그리기 ─────────
 function resize() {

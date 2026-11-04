@@ -70,6 +70,8 @@ public struct Constellation: Codable, Sendable, Identifiable {
     public let nameHanja: String?
     /// 선분 목록. 각 배열은 HIP 번호를 순서대로 이은 폴리라인
     public let lines: [[Int]]
+    /// 별자리 이야기 (신화, 이름의 뜻). tools/stories.json에서 온다. 서양 88개 전부, 한국 전통은 주요 50개만
+    public let story: String?
     /// 별자리 그림. Pup, Vel, Ser은 nil — 용골자리(Car) 그림이 아르고호 전체,
     /// 땅꾼자리(Oph) 그림에 뱀이 포함되어 있어서 따로 없다.
     public let art: ConstellationArt?

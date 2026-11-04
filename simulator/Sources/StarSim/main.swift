@@ -61,6 +61,7 @@ struct Sky: Encodable {
         let dir: Int?              // 한국 전통: 방향 번호 (directions 배열 순서)
         let main: Bool?            // 한국 전통: 28수의 대표 별자리
         let pos: [Double]?         // 이름 놓을 곳 (적도 단위 벡터). 선 없는 별자리는 nil
+        let story: String?         // 별자리 이야기
     }
     struct Culture: Encodable {
         let cons: [Con]
@@ -128,7 +129,7 @@ func culture(_ list: [Constellation]) -> Sky.Culture {
         cons.append(.init(id: c.id, ko: c.nameKo, en: c.nameEn, hanja: c.nameHanja,
                           dir: g.map { directions.firstIndex(of: $0.direction)! },
                           main: g == nil ? nil : KoreanGroup.isMansionMain(c.id),
-                          pos: centers[c.id].map(vec)))
+                          pos: centers[c.id].map(vec), story: c.story))
     }
     return .init(cons: cons, lines: lines, lineCon: lineCon)
 }
