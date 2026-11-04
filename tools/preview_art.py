@@ -4,10 +4,14 @@ import json, sys, math
 import numpy as np
 from PIL import Image, ImageDraw
 
-# 사용법 (저장소 루트에서): python3 tools/preview_art.py . preview.png Ori,UMa,Sco,Cyg
+# 사용법 (저장소 루트에서): python3 tools/preview_art.py . preview.png Ori,UMa,Sco,Cyg [outline]
+#   마지막에 outline을 붙이면 assets/constellations-outline/ (make_outline.py 결과)을 쓴다
 # 필요: pip install numpy pillow
 root, out = sys.argv[1], sys.argv[2]
 ids = sys.argv[3].split(",")
+style = sys.argv[4] if len(sys.argv) > 4 else ""
+art_dir = "constellations-outline" if style == "outline" else "constellations"
+strength = 1.0 if style == "outline" else 0.55
 cat = json.load(open(f"{root}/tools/stars.json", encoding="utf-8"))
 S = {s["hip"]: s for s in cat["stars"]}
 C = {c["id"]: c for c in cat["constellations"]}
@@ -38,12 +42,12 @@ def render(cid, size=520, fov=None):
     D = ctr[None, None, :] - X[..., None] * east + Y[..., None] * north
     Pp = D @ Minv.T
     px, py = Pp[..., 0] / Pp[..., 2], Pp[..., 1] / Pp[..., 2]
-    src = np.asarray(Image.open(f"{root}/assets/constellations/{art['file']}").convert("L"), dtype=float) / 255
+    src = np.asarray(Image.open(f"{root}/assets/{art_dir}/{art['file']}").convert("L"), dtype=float) / 255
     ok = (px >= 0) & (px < w - 1) & (py >= 0) & (py < h - 1) & (Pp[..., 2] > 0)
     lum = np.zeros((size, size)); lum[ok] = src[py[ok].astype(int), px[ok].astype(int)]
     gold = np.array([1.0, 0.75, 0.35])
     bg = np.array([0.03, 0.06, 0.14])
-    img = np.clip(bg + lum[..., None] * gold * 0.55, 0, 1)
+    img = np.clip(bg + lum[..., None] * gold * strength, 0, 1)
     im = Image.fromarray((img * 255).astype(np.uint8)); dr = ImageDraw.Draw(im)
     def to_screen(ra, dec):
         x, y = proj(unit(ra, dec)); return ((x + half) / (2 * half) * size, (half - y) / (2 * half) * size)

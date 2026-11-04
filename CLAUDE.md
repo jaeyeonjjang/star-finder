@@ -21,8 +21,10 @@
 ```
 star-finder/
 ├── docs/StarCore-가이드.md   # 공부용 구조 설명 (StarCore 바꾸면 같이 갱신)
-├── assets/constellations/   # 별자리 그림 PNG 85개 (Stellarium, build_catalog.py가 받음)
+├── assets/constellations/   # 별자리 그림 PNG 85개 (Stellarium 원본, 명암 있는 흑백)
+├── assets/constellations-outline/  # 윤곽선 스타일 변환본 (make_outline.py) ← 앱에서 이걸 씀
 ├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json + 그림
+├── tools/make_outline.py    # 원본 그림 -> 윤곽선 + 번짐 (numpy, pillow)
 ├── tools/preview_art.py     # 그림이 별에 맞게 겹치는지 확인용 이미지 (numpy, pillow)
 └── StarCore/                # 순수 Swift 패키지 (Foundation만 사용, WSL/맥 공용)
     ├── Sources/StarCore/Models.swift     # StarCatalog, Star, Constellation, Horizontal, Vector3, Observer
@@ -38,6 +40,7 @@ star-finder/
 - 별 좌표는 J2000 기준(도 단위). 세차 보정은 `Astronomy.Context`에서 처리. 대기굴절은 `Astronomy.refracted(_:)`로 따로 적용 (`horizontal`은 기하학적 위치).
 - 크기 지수(0.12), 색 채도(0.6)는 튜닝 값. 실기기에서 보고 조정.
 - 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선(CC BY-SA 4.0), Stellarium 그림(Free Art License), d3-celestial(BSD-3). 앱에 출처 표기 필요.
+- 그림 스타일: 윤곽선(흰 선 + 번짐, 검은 배경). 앱에서 금색으로 물들이고 가산 합성. 감도 기본값 ink=12.
 - 그림 UV는 이미지 왼쪽 위 원점. RealityKit에서 뒤집혀 보이면 v를 1-v로, 안 보이면 삼각형 방향(컬링) 확인.
 
 ## 진행 상황
@@ -47,6 +50,7 @@ star-finder/
 - [x] GitHub 저장소 생성 (github.com/jaeyeonjjang/star-finder)
 - [x] (WSL) 미리 만들어 둠: 대기굴절, 등급별 크기, 색지수->색, 별자리 라벨 위치 (테스트 21개)
 - [x] (WSL) 별자리 그림 85장(88개 별자리 모두 덮음 — Car=아르고호 전체, Oph에 뱀 포함): 데이터 + 메시 계산 + 미리보기로 위치 확인 (테스트 28개)
+- [x] (WSL) 그림 윤곽선 스타일 변환 85장
 - [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
 - [ ] (맥) 별자리 그림 표시 (MeshDescriptor + UnlitMaterial, 금색, 가산 합성)

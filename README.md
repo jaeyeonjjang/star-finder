@@ -26,6 +26,10 @@ VS Code에서는 "WSL" 확장으로 폴더를 연 뒤 "Swift" 확장(swiftlang)�
 # 데이터 생성 (Python 3, 외부 패키지 불필요)
 cd tools && python3 build_catalog.py        # -> stars.json (별 ~5,000개, 88개 별자리) + ../assets/constellations/*.png
 
+# (선택) 별자리 그림 윤곽선 스타일 변환 / 미리보기 — numpy, pillow 필요
+cd .. && python3 tools/make_outline.py      # -> assets/constellations-outline/*.png
+python3 tools/preview_art.py . preview.png Ori,Leo outline
+
 # 계산 로직 테스트
 cd ../StarCore && swift test
 ```
