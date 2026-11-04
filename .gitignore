@@ -1,0 +1,13 @@
+# Swift
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Python
+__pycache__/
+
+# OS
+.DS_Store
+*:Zone.Identifier
