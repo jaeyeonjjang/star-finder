@@ -1,7 +1,8 @@
 import Foundation
 
 /// 적도좌표(J2000) -> 지평좌표 변환.
-/// 세차 보정 포함, 대기굴절 미포함. astropy 대비 오차 약 0.01° (AR 용도로 충분).
+/// 세차 보정 포함. astropy 대비 오차 약 0.01° (AR 용도로 충분).
+/// `horizontal`은 대기굴절 미포함(기하학적 위치) — 눈에 보이는 위치는 `refracted(_:)`를 한 번 더 적용.
 public enum Astronomy {
 
     // MARK: - 시간
@@ -60,6 +61,28 @@ public enum Astronomy {
 
     public static func horizontal(of star: Star, context: Context) -> Horizontal {
         horizontal(ra: star.ra, dec: star.dec, context: context)
+    }
+
+    // MARK: - 대기굴절
+
+    /// 대기굴절량 (도). 공기가 빛을 휘게 해서 별이 실제보다 높아 보이는 정도.
+    /// Sæmundsson (1986) 공식, 입력은 굴절 전(기하학적) 고도.
+    /// 지평선에서 약 0.5°, 고도 45°에서 약 0.017°, 천정에서 0.
+    /// - Parameters:
+    ///   - pressure: 기압 (hPa), 기본 1010
+    ///   - temperature: 기온 (°C), 기본 10
+    public static func refraction(altitude: Double, pressure: Double = 1010, temperature: Double = 10) -> Double {
+        // 공식이 -5° 근처에서 발산하므로 -1° 아래는 -1° 값으로 고정 (지평선 아래라 보이지 않음)
+        let h = max(altitude, -1)
+        let arcmin = 1.02 / tan(rad(h + 10.3 / (h + 5.11)))
+        let scale = (pressure / 1010) * (283 / (273 + temperature))
+        return max(arcmin, 0) / 60 * scale   // 천정 근처에서 살짝 음수가 나오는 것 방지
+    }
+
+    /// 대기굴절을 적용한 지평좌표 (눈에 보이는 위치)
+    public static func refracted(_ h: Horizontal, pressure: Double = 1010, temperature: Double = 10) -> Horizontal {
+        Horizontal(altitude: h.altitude + refraction(altitude: h.altitude, pressure: pressure, temperature: temperature),
+                   azimuth: h.azimuth)
     }
 
     /// 지평좌표 -> AR 공간 단위 벡터 (+x 동, +y 위, -z 북)

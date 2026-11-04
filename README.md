@@ -36,10 +36,15 @@ cd ../StarCore && swift test
 let catalog = try StarCatalog.load(from: data)
 let ctx = Astronomy.Context(date: .now, observer: .init(latitude: 37.5665, longitude: 126.978))
 for star in catalog.stars {
-    let h = Astronomy.horizontal(of: star, context: ctx)
+    let h = Astronomy.refracted(Astronomy.horizontal(of: star, context: ctx))  // 눈에 보이는 위치
     guard h.isAboveHorizon else { continue }
     let v = Astronomy.arVector(h)   // ARKit 좌표 (+x 동, +y 위, -z 북)
+    let size = star.relativeSize    // 0등급 = 1.0
+    let color = star.color          // RGB (0...1)
 }
+
+// 별자리 이름 라벨: 시작할 때 한 번 계산
+let centers = catalog.constellationCenters()   // ["Ori": Equatorial(ra:dec:), ...]
 ```
 
 ## 데이터 라이선스

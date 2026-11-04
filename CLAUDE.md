@@ -22,13 +22,16 @@ star-finder/
 ├── tools/build_catalog.py   # HYG + Stellarium + d3-celestial -> stars.json
 └── StarCore/                # 순수 Swift 패키지 (Foundation만 사용, WSL/맥 공용)
     ├── Sources/StarCore/Models.swift     # StarCatalog, Star, Constellation, Horizontal, Vector3, Observer
-    ├── Sources/StarCore/Astronomy.swift  # 율리우스일, GMST, 세차 보정, 적도->지평, 지평->AR 벡터
-    └── Tests/StarCoreTests/              # astropy 기준값으로 검증 (허용 오차 0.05°)
+    ├── Sources/StarCore/Astronomy.swift  # 율리우스일, GMST, 세차 보정, 적도->지평, 대기굴절, 지평->AR 벡터
+    ├── Sources/StarCore/Appearance.swift # 등급->크기, 색지수->RGB
+    ├── Sources/StarCore/Labels.swift     # 별자리 이름 라벨 위치(구면 중심)
+    └── Tests/StarCoreTests/              # astropy 기준값 + 실제 stars.json으로 검증 (허용 오차 0.05°)
 ```
 
 ## 규칙
 - StarCore에는 ARKit, CoreLocation, simd 등 애플 전용 프레임워크를 넣지 않는다 (WSL에서 빌드돼야 함).
-- 별 좌표는 J2000 기준(도 단위). 세차 보정은 `Astronomy.Context`에서 처리. 대기굴절은 아직 미적용.
+- 별 좌표는 J2000 기준(도 단위). 세차 보정은 `Astronomy.Context`에서 처리. 대기굴절은 `Astronomy.refracted(_:)`로 따로 적용 (`horizontal`은 기하학적 위치).
+- 크기 지수(0.12), 색 채도(0.6)는 튜닝 값. 실기기에서 보고 조정.
 - 데이터 라이선스: HYG(CC BY-SA 4.0), Stellarium 별자리 선(GPL-2.0), d3-celestial(BSD-3). 상용 출시 전 확인 필요.
 
 ## 진행 상황
@@ -36,6 +39,7 @@ star-finder/
 - [x] StarCore 코드 작성 (공식은 astropy 대비 오차 0.01° 이내로 검증)
 - [x] WSL에 Swift 6.4.2 설치, `swift test` 7개 통과 (2026-11-04)
 - [x] GitHub 저장소 생성 (github.com/jaeyeonjjang/star-finder)
+- [x] (WSL) 미리 만들어 둠: 대기굴절, 등급별 크기, 색지수->색, 별자리 라벨 위치 (테스트 21개)
 - [ ] (맥) Xcode 프로젝트 생성, AR 화면 + 북쪽 방향 맞추기 테스트 ← **현재 단계**
 - [ ] (맥) StarCore 연결, 별/별자리 선/이름 라벨(빌보드) 표시
-- [ ] 다듬기: 등급별 별 크기, 색지수로 별 색, 지평선 아래 처리, 행성/달, 탭하면 정보
+- [ ] 다듬기: 지평선 아래 처리, 행성/달, 탭하면 정보
