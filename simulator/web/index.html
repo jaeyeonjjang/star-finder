@@ -91,8 +91,6 @@
       <label><input type="checkbox" id="showNames" checked> 별 이름</label>
       <label><input type="checkbox" id="showGround" checked> 땅</label>
     </div>
-    <div class="row">그림 밝기 <input id="artOpacity" type="range" min="0" max="1" step="0.01" value="0.4"></div>
-    <div class="row">별 크기 <input id="starScale" type="range" min="0.3" max="3" step="0.01" value="1"></div>
     <div style="color:var(--muted);margin-top:8px">드래그: 둘러보기 · 휠: 확대/축소<br>방향키: 둘러보기 · 스페이스: 재생<br>가운데 동그라미 = 폰 카메라 가운데<br>위쪽 이름 누르기 또는 i: 별자리 이야기</div>
   </div>
 </div>
@@ -366,12 +364,12 @@ for (const b of document.querySelectorAll('.tabs button')) {
 function syncTabs() { for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.mode === mode); }
 $('legend').innerHTML = DIRS.map((d, i) =>
   `<div><i style="background:${css(d.color)}"></i>${d.name} ${d.guardian || '3원'} · ${d.colorName}${i === 2 ? ' (화면에선 보라)' : ''}</div>`).join('');
-const ART_GOLD = new THREE.Color('#ffc061');   // 그림 색 (금색 고정)
+const ART_COLOR = new THREE.Color('#ffdca8');   // 그림 색: 하얀빛이 조금 섞인 금색
+const ART_OPACITY = 0.3;                        // 그림 밝기 (보는 별자리는 2.2배)
 function applyArtStyle() {
-  const o = +$('artOpacity').value;
-  for (const [ci, m] of artByCon) { m.color.copy(ART_GOLD); m.opacity = ci === current?.west ? Math.min(1, o * 2.2) : o; }
+  const o = ART_OPACITY;
+  for (const [ci, m] of artByCon) { m.color.copy(ART_COLOR); m.opacity = ci === current?.west ? Math.min(1, o * 2.2) : o; }
 }
-$('artOpacity').addEventListener('input', applyArtStyle);
 $('hide').onclick = () => { const b = $('body'); const h = b.style.display === 'none'; b.style.display = h ? '' : 'none'; $('hide').textContent = h ? '–' : '+'; };
 syncTabs(); applyOpts(); applyArtStyle();
 
@@ -477,7 +475,7 @@ function frame(now) {
     setTime(t + dt * +$('speed').value / F.stepMinutes);   // speed = 초당 몇 분
     if (t >= nF - 1) togglePlay();
   }
-  starMat.uniforms.scale.value = +$('starScale').value * Math.sqrt(60 / camera.fov) * devicePixelRatio;
+  starMat.uniforms.scale.value = Math.sqrt(60 / camera.fov) * devicePixelRatio;
   updateHere();
   renderer.render(scene, camera);
   placeLabels();
